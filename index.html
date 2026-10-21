@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Футбольный Турнир Онлайн PRO</title>
+    <style>
+        :root { --prm: #007bff; --suc: #28a745; --dng: #dc3545; --drk: #343a40; }
+        body { font-family: -apple-system, sans-serif; margin: 10px; background: #f0f2f5; padding-bottom: 95px; }
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .flex-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        h1 { font-size: 20px; margin: 0; }
+        h2 { font-size: 16px; margin: 0 0 10px 0; color: #555; }
+        .btn-set { background: #e9ecef; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; background: #f8f9fa; padding: 10px; border-radius: 8px; }
+        select { font-size: 16px; padding: 10px; width: 48%; border-radius: 6px; border: 1px solid #ccc; background: white; font-weight: bold; }
+        .p-select { font-size: 14px; padding: 6px; width: 100%; margin-bottom: 5px; border-radius: 4px; }
+        .btn-box { display: flex; align-items: center; gap: 12px; }
+        .btn-circle { width: 46px; height: 46px; border-radius: 50%; border: none; font-size: 24px; font-weight: bold; background: #e9ecef; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .score { font-size: 26px; font-weight: bold; min-width: 25px; text-align: center; }
+        .btn-main { width: 100%; padding: 14px; font-size: 16px; background: var(--prm); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; text-align: center; }
+        th, td { padding: 12px 5px; border-bottom: 1px solid #eee; font-size: 14px; }
+        th { background: var(--drk); color: white; }
+        .match { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 15px; }
+        .btn-del { background: none; border: none; color: var(--dng); font-size: 20px; cursor: pointer; padding: 5px; }
+        .t-pan { position: fixed; bottom: 0; left: 0; right: 0; background: var(--drk); color: white; display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; }
+        .t-disp { font-size: 30px; font-family: monospace; font-weight: bold; color: #ffc107; }
+        .t-disp.finished { color: var(--dng); animation: blk 1s infinite; }
+        .t-btn { padding: 12px 18px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; color: white; min-width: 80px; }
+        .btn-start { background: var(--suc); }
+        .btn-reset { background: #6c757d; }
+        @keyframes blk { 50% { opacity: 0.3; } }
+        
+        .judge-only { display: none; }
+        body.is-judge .judge-only { display: block; }
+        .team-rating-badge { font-size: 12px; color: #666; font-weight: bold; margin-top: 2px; background: #e2e3e5; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <div class="flex-hdr">
+        <h1>🏆 Турнир по кругу ОНЛАЙН PRO</h1>
+        <button class="btn-set judge-only" onclick="toggleRosterEditor()">⚙️ Составы команд</button>
+        <button class="btn-set" style="background: #ffc107;" onclick="activateJudgeMode()">🔑 Я Судья</button>
+    </div>
+
+    <!-- ОКНО РЕДАКТИРОВАНИЯ СОСТАВОВ ИЗ БАЗЫ (СКРЫТО ПО УМОЛЧАНИЮ) -->
+    <div class="card judge-only" id="roster-editor-card" style="display: none; border: 2px solid var(--prm);">
+        <h2>⚙ Формирование составов на игровой день</h2>
+        <div id="roster-selectors-container"></div>
+        <button class="btn-main" style="background: var(--suc);" onclick="saveRosters()">Применить и сохранить составы</button>
+    </div>
+
+    <!-- ВВОД МАТЧА -->
+    <div class="card judge-only">
+        <h2>Ввод результата матча (Панель Судьи)</h2>
+        <div class="row" style="flex-direction: column; align-items: stretch; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div>
+                    <select id="t1" onchange="resetScorers()"></select>
+                    <div id="t1-rating-display" class="team-rating-badge">Рейтинг: 0.00</div>
+                </div>
+                <div class="btn-box">
+                    <button class="btn-circle" onclick="changeVal('s1', -1)">-</button>
+                    <span id="s1" class="score">0</span>
+                    <button class="btn-circle" onclick="openPlayerSelector(1)">+</button>
+                </div>
+            </div>
+            <div id="players-selector-1" style="display: none; background: #e9ecef; padding: 8px; border-radius: 6px; gap: 5px; flex-wrap: wrap;"></div>
+        </div>
+
+        <div style="text-align:center; font-weight:bold; color:#888; font-size:14px; margin: 4px 0;">против</div>
+
+        <div class="row" style="flex-direction: column; align-items: stretch; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div>
+                    <select id="t2" onchange="resetScorers()"></select>
+                    <div id="t2-rating-display" class="team-rating-badge">Рейтинг: 0.00</div>
+                </div>
+                <div class="btn-box">
+                    <button class="btn-circle" onclick="changeVal('s2', -1)">-</button>
+                    <span id="s2" class="score">0</span>
+                    <button class="btn-circle" onclick="openPlayerSelector(2)">+</button>
+                </div>
+            </div>
+            <div id="players-selector-2" style="display: none; background: #e9ecef; padding: 8px; border-radius: 6px; gap: 5px; flex-wrap: wrap;"></div>
+        </div>
+
+        <div id="current-scorers-review" style="font-size: 13px; color: #555; margin: 10px 0; padding: 5px; background: #fff3cd; border-radius: 6px; display: none;"></div>
+        <button class="btn-main" onclick="saveMatchData()">Сохранить матч в облако</button>
+    </div>
+
+    <!-- ТАБЛИЦА -->
+    <div class="card" style="overflow-x: auto;">
+        <h2>Таблица результатов</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding-left:10px;">Команда</th>
+                    <th>В</th><th>Н</th><th>П</th><th>Мячи</th><th>Очки</th>
+                </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+
+    <!-- ИСТОРИЯ -->
+    <div class="card">
+        <h2>История матчей</h2>
+        <div id="history-list"></div>
+    </div>
+
+    <!-- ТАБЛИЦА БОМБАРДИРОВ -->
+    <div class="card">
+        <h2>⚽ Лучшие бомбардиры турнира дня</h2>
+        <table>
+            <thead>
+                <tr><th style="width:10%;">№</th><th style="text-align:left; padding-left:10px;">Игрок</th><th style="width:25%;">Голы</th></tr>
+            </thead>
+            <tbody id="scorers-body"></tbody>
+        </table>
+    </div>
+
+    <!-- ТАЙМЕР -->
+    <div class="t-pan">
+        <div><span style="font-size: 11px; display: block; color: #aaa; font-weight: bold;">ТАЙМЕР МАТЧА</span><div id="timer-display" class="t-disp">07:00</div></div>
+        <div style="display: flex; gap: 10px;"><button id="timer-btn" class="t-btn btn-start judge-only" onclick="runTimer()">Старт</button><button class="t-btn btn-reset judge-only" onclick="clearTimer()">Сброс</button></div>
+    </div>
+
+<script>
+    const FIREBASE_URL = "https://firebasedatabase.app";
+
+    let teams = ["Команда 1", "Команда 2", "Команда 3"];
+    let teamPlayers = {
+        "Команда 1": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"],
+        "Команда 2": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"],
+        "Команда 3": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"]
+    };
+    
+    // Глобальная база всех игроков из сезонного приложения и их рейтингов
+    let globalSeasonScorers = {}; 
+    let teamRatings = {}; // Хранение рассчитанных суммарных рейтингов команд
+
+    let games = [];
+    let timeMax = 7 * 60; let timeCurrent = timeMax; let clockId = null;
+    let currentMatchScorers1 = []; let currentMatchScorers2 = [];
+
+    const audioObj = new (window.AudioContext || window.webkitAudioContext)();
+    function beep() {
+        if (audioObj.state === 'suspended') audioObj.resume();
+        let osc = audioObj.createOscillator(); let vol = audioObj.createGain();
+        osc.connect(vol); vol.connect(audioObj.destination);
+        osc.frequency.setValueAtTime(900, audioObj.currentTime);
+        vol.gain.setValueAtTime(1, audioObj.currentTime); osc.start();
+        vol.gain.exponentialRampToValueAtTime(0.001, audioObj.currentTime + 1.5);
+        osc.stop(audioObj.currentTime + 1.5);
+    }
+
+    function activateJudgeMode() {
+        let pin = prompt("Введите пароль судьи:");
+        if (pin === "777") {
+            document.body.classList.add('is-judge');
+            alert("Режим судьи активирован!");
+            let resetBtn = document.getElementById('admin-reset-box');
+            if (resetBtn) resetBtn.style.display = 'block';
+            loadGlobalPlayersData(); // подгружаем базу при входе
+            buildSelects(true);
+            refresh();
+        } else { alert("Неверный пароль!"); }
+    }
+
+    // ЗАГРУЗКА ИГРОКОВ И ИХ СРЕДНЕГО РЕЙТИНГА ИЗ СЕЗОННОГО ПРИЛОЖЕНИЯ
+    async function loadGlobalPlayersData() {
+        try {
+            let res = await fetch(FIREBASE_URL + "/season_archive.json");
+if (archive && archive.seasonScorers) {
+                globalSeasonScorers = archive.seasonScorers;
+                buildRosterEditors(); // Перестраиваем списки выбора
+            }
+        } catch (e) { 
+            console.log("Ошибка загрузки сезонных игроков"); 
+        }
+    }
+
+    function toggleRosterEditor() {
+        var card = document.getElementById('roster-editor-card');
+        if (!card) return;
+        card.style.display = card.style.display === 'none' ? 'block' : 'none';
+        if (card.style.display === 'block') loadGlobalPlayersData();
+    }
+
+    // Сборка 5 выпадающих списков выбора для каждой из 3 команд
+    function buildRosterEditors() {
+        var container = document.getElementById('roster-selectors-container');
+        if (!container) return;
+
+        // Получаем чистый отсортированный список всех игроков из сезона
+        var playerNames = Object.keys(globalSeasonScorers).sort();
+        if (playerNames.length === 0) {
+            container.innerHTML = "<p style='color:red; font-size:14px;'>В базе сезона еще нет игроков! Внесите хотя бы один матч в сезонном приложении.</p>";
+            return;
+        }
+
+        container.innerHTML = teams.map(function(t) {
+            var selectsHtml = "";
+            for (var i = 0; i < 5; i++) {
+                var currentSavedPlayer = (teamPlayers[t] && teamPlayers[t][i]) ? teamPlayers[t][i] : "";
+                
+                var optionsHtml = playerNames.map(function(p) {
+                    var score = globalSeasonScorers[p].goals || 0;
+                    var gamesCount = globalSeasonScorers[p].games || 0;
+                    var winPts = globalSeasonScorers[p].winPts || 0;
+                    var avg = gamesCount > 0 ? ((winPts + score) / gamesCount) : 0;
+                    
+                    var isSelected = p === currentSavedPlayer ? "selected" : "";
+                    return '<option value="' + p + '" ' + isSelected + '>' + p + ' (Рейт: ' + avg.toFixed(2) + ')</option>';
+                }).join('');
+
+                selectsHtml += '<select class="p-select" id="roster-select-' + t + '-' + i + '">' + optionsHtml + '</select>';
+            }
+
+            return '<div style="margin-bottom:15px; background:#f1f3f5; padding:10px; border-radius:8px;">' +
+                   '<h3 style="margin:0 0 8px 0; font-size:15px; color:var(--drk);">' + t + '</h3>' + selectsHtml + '</div>';
+        }).join('');
+    }
+
+    // Сохранение и расчет общего рейтинга команды
+    function saveRosters() {
+        var newTeamPlayers = {};
+        teams.forEach(function(t) {
+            var list = [];
+            for (var i = 0; i < 5; i++) {
+                var selectEl = document.getElementById('roster-select-' + t + '-' + i);
+                if (selectEl) {
+                    list.push(selectEl.value);
+                }
+            }
+            newTeamPlayers[t] = list;
+        });
+
+        teamPlayers = newTeamPlayers;
+        calculateTeamRatings(); // Считаем сумму рейтингов состава
+        toggleRosterEditor();
+        syncToCloud();
+        refresh();
+    }
+
+    // МАТЕМАТИЧЕСКИЙ РАСЧЕТ СИЛЫ КОМАНДЫ (СУММА СРЕДНИХ РЕЙТИНГОВ ИГРОКОВ)
+    function calculateTeamRatings() {
+        teams.forEach(function(t) {
+            var totalRating = 0;
+            var players = teamPlayers[t] || [];
+            
+            players.forEach(function(p) {
+                if (globalSeasonScorers[p]) {
+                    var goals = globalSeasonScorers[p].goals || 0;
+                    var gamesCount = globalSeasonScorers[p].games || 0;
+                    var winPts = globalSeasonScorers[p].winPts || 0;
+                    var avg = gamesCount > 0 ? ((winPts + goals) / gamesCount) : 0;
+                    totalRating += avg;
+                }
+            });
+            teamRatings[t] = totalRating;
+        });
+        updateRatingDisplays();
+    }
+
+    function updateRatingDisplays() {
+        var t1 = document.getElementById('t1') ? document.getElementById('t1').value : null;
+        var t2 = document.getElementById('t2') ? document.getElementById('t2').value : null;
+        
+        if (t1 && teamRatings[t1] !== undefined) document.getElementById('t1-rating-display').innerText = "Сила состава: " + teamRatings[t1].toFixed(2);
+        if (t2 && teamRatings[t2] !== undefined) document.getElementById('t2-rating-display').innerText = "Сила состава: " + teamRatings[t2].toFixed(2);
+    }
+
+    async function syncToCloud() {
+        if (!document.body.classList.contains('is-judge')) return;
+        var cleanGames = games.filter(function(g) { return g !== null && g !== undefined; });
+        await fetch(FIREBASE_URL + "/tournament.json", {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ teams, teamPlayers, teamRatings, games: cleanGames, timeCurrent })
+        });
+    }
+
+    function openPlayerSelector(teamNum) {
+        var teamName = document.getElementById('t' + teamNum).value;
+        var container = document.getElementById('players-selector-' + teamNum);
+        if (!container) return;
+
+        if (container.style.display === 'flex') { container.style.display = 'none'; return; }
+
+        var availablePlayers = teamPlayers[teamName] || [];
+        container.innerHTML = availablePlayers.map(function(player) {
+            return '<button type="button" style="padding: 10px 14px; background: white; border: 1px solid #007bff; border-radius: 6px; font-weight: bold; color: #007bff; cursor: pointer; font-size: 14px;" ' +
+                   'onclick="addGoalViaTap(' + teamNum + ', \'' + player.replace(/'/g, "\\'") + '\')">' + player + '</button>';
+        }).join('');
+        container.style.display = 'flex';
+    }
+
+    function addGoalViaTap(teamNum, playerName) {
+        var scoreNode = document.getElementById('s' + teamNum);
+        var currentScore = parseInt(scoreNode.innerText);
+        scoreNode.innerText = currentScore + 1;
+        if (teamNum === 1) currentMatchScorers1.push(playerName);
+        else currentMatchScorers2.push(playerName);
+        document.getElementById('players-selector-' + teamNum).style.display = 'none';
+        reviewCurrentScorers();
+    }
+
+    function changeVal(id, delta) {
+        if (delta >= 0) return; 
+        var node = document.getElementById(id); 
+        var currentScore = parseInt(node.innerText);
+        var newScore = currentScore + delta; 
+        if (newScore < 0) return;
+        node.innerText = newScore;
+        if (id === 's1') currentMatchScorers1.pop();
+        else if (id === 's2') currentMatchScorers2.pop();
+        reviewCurrentScorers();
+    }
+
+    function reviewCurrentScorers() {
+        var reviewNode = document.getElementById('current-scorers-review'); 
+        if (!reviewNode) return;
+        if (currentMatchScorers1.length === 0 && currentMatchScorers2.length === 0) { reviewNode.style.display = 'none'; return; }
+        var t1Name = document.getElementById('t1').value; 
+        var t2Name = document.getElementById('t2').value;
+        reviewNode.innerHTML = '<b>Авторы голов текущего матча:</b><br>' + 
+            t1Name + ': ' + (currentMatchScorers1.join(', ') || '—') + '<br>' + 
+            t2Name + ': ' + (currentMatchScorers2.join(', ') || '—');
+        reviewNode.style.display = 'block';
+    }
+
+    function resetScorers() {
+        currentMatchScorers1 = []; currentMatchScorers2 = [];
+        if (document.getElementById('s1')) document.getElementById('s1').innerText = "0";
+        if (document.getElementById('s2')) document.getElementById('s2').innerText = "0";
+        if (document.getElementById('players-selector-1')) document.getElementById('players-selector-1').style.display = 'none';
+        if (document.getElementById('players-selector-2')) document.getElementById('players-selector-2').style.display = 'none';
+        if (document.getElementById('current-scorers-review')) document.getElementById('current-scorers-review').style.display = 'none';
+        updateRatingDisplays();
+    }
+
+    function saveMatchData() {
+        var teamA = document.getElementById('t1').value; 
+        var teamB = document.getElementById('t2').value;
+        var sA = parseInt(document.getElementById('s1').innerText); 
+        var sB = parseInt(document.getElementById('s2').innerText);
+        if (teamA === teamB) { alert("Ошибка: Одна и та же команда!"); return; }
+
+        games.push({ 
+            id: Date.now(), t1: teamA, s1: sA, t2: teamB, s2: sB,
+            scorers1: [...currentMatchScorers1], scorers2: [...currentMatchScorers2],
+            t1Rating: teamRatings[teamA] || 0, t2Rating: teamRatings[teamB] || 0
+        });
+        resetScorers(); syncToCloud(); refresh();
+    }
+
+    function dropRow(indexToDelete) {
+        if (!document.body.classList.contains('is-judge')) return;
+        games.splice(Number(indexToDelete), 1); refresh(); syncToCloud();
+    }
+
+    function startCloudListener() {
+        setInterval(async () => {
+            try {
+                var res = await fetch(FIREBASE_URL + "/tournament.json");
+                var cloudData = await res.json();
+                if (cloudData) {
+                    if (cloudData.teams) teams = cloudData.teams;
+                    if (cloudData.teamPlayers) teamPlayers = cloudData.teamPlayers;
+                    if (cloudData.teamRatings) teamRatings = cloudData.teamRatings;
+                    games = cloudData.games ? Object.values(cloudData.games) : [];
+                    if (!clockId) { timeCurrent = cloudData.timeCurrent || timeMax; showTime(); }
+                    if (!document.body.classList.contains('is-judge')) buildSelects();
+                    refresh();
+                }
+            } catch (e) {}
+        }, 2000);
+    }
+
+    function runTimer() {
+        if (audioObj.state === 'suspended') audioObj.resume();
+        var b = document.getElementById('timer-btn');
+b.innerText = "Старт"; 
+            b.style.background = "#28a745"; 
+            syncToCloud();
+        } else {
+            if (timeCurrent <= 0) clearTimer();
+            b.innerText = "Пауза"; 
+            b.style.background = "#6c757d";
+            clockId = setInterval(() => {
+                timeCurrent--; 
+                showTime();
+                if (timeCurrent % 5 === 0) syncToCloud(); 
+                if (timeCurrent <= 0) {
+                    clearInterval(clockId); 
+                    clockId = null; 
+                    b.innerText = "Старт"; 
+                    b.style.background = "#28a745";
+                    document.getElementById('timer-display').classList.add('finished'); 
+                    beep(); 
+                    syncToCloud();
+                }
+            }, 1000);
+        }
+    }
+
+    function clearTimer() {
+        clearInterval(clockId); 
+        clockId = null; 
+        timeCurrent = timeMax;
+        document.getElementById('timer-btn').innerText = "Старт"; 
+        document.getElementById('timer-btn').style.background = "#28a745";
+        document.getElementById('timer-display').classList.remove('finished'); 
+        showTime(); 
+        syncToCloud();
+    }
+
+    function showTime() {
+        var m = Math.floor(timeCurrent / 60), s = timeCurrent % 60;
+        document.getElementById('timer-display').innerText = m.toString().padStart(2,'0') + ":" + s.toString().padStart(2,'0');
+    }
+
+    function buildSelects(force = false) {
+        var select1 = document.getElementById('t1'); 
+        var select2 = document.getElementById('t2');
+        if (!select1 || !select2) return;
+        if (!force && select1.options.length > 0 && document.body.classList.contains('is-judge')) return;
+        
+        var val1 = select1.value; 
+        var val2 = select2.value;
+        
+        // Восстановлена генерация тегов option для списка выбора команд
+        var html = teams.map(function(t) { 
+            return '<option value="' + t + '">' + t + '</option>'; 
+        }).join('');
+        
+        select1.innerHTML = html; 
+        select2.innerHTML = html;
+        
+        if (!force && val1 && val2) { 
+            select1.value = val1; 
+            select2.value = val2; 
+        } else { 
+            if (select2.options.length > 1) select2.selectedIndex = 1; 
+            resetScorers(); 
+        }
+    }
+
+    function refresh() {
+        var data = {}; 
+        var playerStats = {};
+        teams.forEach(function(t) {
+            data[t] = { w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+            var players = teamPlayers[t] || [];
+            players.forEach(function(p) { playerStats[p] = 0; });
+        });
+
+        games = games.filter(function(g) { return g !== null && g !== undefined; });
+
+        games.forEach(function(g) {
+            if (data[g.t1] && data[g.t2]) {
+                data[g.t1].gf += g.s1; data[g.t1].ga += g.s2;
+                data[g.t2].gf += g.s2; data[g.t2].ga += g.s1;
+                if (g.s1 > g.s2) { data[g.t1].w++; data[g.t1].pts += 3; data[g.t2].l++; } 
+                else if (g.s1 < g.s2) { data[g.t2].w++; data[g.t2].pts += 3; data[g.t1].l++; } 
+                else { data[g.t1].d++; data[g.t1].pts += 1; data[g.t2].d++; data[g.t2].pts += 1; }
+
+                if (g.scorers1) g.scorers1.forEach(function(p) { if(playerStats[p] !== undefined) playerStats[p]++; });
+                if (g.scorers2) g.scorers2.forEach(function(p) { if(playerStats[p] !== undefined) playerStats[p]++; });
+            }
+        });
+
+        // Восстановлен вывод основной турнирной таблицы команд дня
+        var order = [...teams].sort(function(x, y) { return (data[y].pts !== data[x].pts) ? data[y].pts - data[x].pts : data[y].gf - data[x].gf; });
+        document.getElementById('table-body').innerHTML = order.map(function(t) { 
+            return '<tr>' +
+                '<td style="text-align:left; padding-left:10px; font-weight:bold;">' + t + '</td>' +
+                '<td>' + data[t].w + '</td>' +
+                '<td>' + data[t].d + '</td>' +
+                '<td>' + data[t].l + '</td>' +
+                '<td style="color:#666;"><b>' + data[t].gf + '</b>:' + data[t].ga + '</td>' +
+                '<td style="font-weight:bold; color:var(--prm); font-size:16px;">' + data[t].pts + '</td>' +
+            '</tr>';
+        }).join('');
+
+        // Восстановлен вывод истории матчей с отображением силы составов
+        var isJ = document.body.classList.contains('is-judge');
+        document.getElementById('history-list').innerHTML = games.length === 0 ? '<p style="text-align:center; color:#888;">Матчей пока нет</p>' : 
+            games.map(function(g, idx) {
+                var s1Text = g.scorers1 && g.scorers1.length > 0 ? "(" + g.scorers1.join(', ') + ")" : '';
+                var s2Text = g.scorers2 && g.scorers2.length > 0 ? "(" + g.scorers2.join(', ') + ")" : '';
+                var r1Text = g.t1Rating ? " [Сила: " + g.t1Rating.toFixed(2) + "]" : "";
+                var r2Text = g.t2Rating ? " [Сила: " + g.t2Rating.toFixed(2) + "]" : "";
+                return '<div class="match" style="flex-direction:column; align-items:flex-start; gap:2px;">' +
+                        '<div style="display:flex; justify-content:space-between; width:100%; align-items:center;">' +
+                            '<span><b>' + g.t1 + '</b>' + r1Text + ' ' + g.s1 + ' : ' + g.s2 + ' <b>' + g.t2 + '</b>' + r2Text + '</span>' +
+                            (isJ ? '<button class="btn-del" onclick="dropRow(' + idx + ')">🗑️</button>' : '') +
+                        '</div>' +
+                        '<div style="font-size:12px; color:#666; padding-left:5px;">' + g.t1 + ': ' + (s1Text || '—') + ' | ' + g.t2 + ': ' + (s2Text || '—') + '</div>' +
+                    '</div>';
+            }).join('');
+
+        // Восстановлен вывод таблицы бомбардиров игрового дня
+        var scorersOrder = Object.keys(playerStats).map(function(n) { return { name: n, goals: playerStats[n] }; }).filter(function(p) { return p.goals > 0; }).sort(function(a, b) { return b.goals - a.goals; });
+        document.getElementById('scorers-body').innerHTML = scorersOrder.length === 0 ? '<tr><td colspan="3" style="color:#888; padding:10px;">Голов пока не было</td></tr>' : 
+            scorersOrder.map(function(p, idx) { 
+                return '<tr>' +
+                    '<td>' + (idx + 1) + '</td>' +
+                    '<td style="text-align:left; padding-left:10px; font-weight:bold;">' + p.name + '</td>' +
+                    '<td style="font-weight:bold; color:var(--suc); font-size:16px;">' + p.goals + '</td>' +
+                '</tr>'; 
+            }).join('');
+    }
+
+    window.onload = function() { 
+        buildSelects(); 
+        showTime(); 
+        refresh(); 
+        startCloudListener(); 
+        loadGlobalPlayersData();
+        
+        // Динамическое создание скрытой кнопки обнуления в самом низу страницы
+        var mainBody = document.body;
+        if (mainBody) {
+            var div = document.createElement('div'); 
+            div.id = 'admin-reset-box';
+            div.style.cssText = 'display:none; margin:20px 10px; padding-top:10px;';
+            div.innerHTML = '<button class="btn-main" style="background:var(--dng); margin-bottom:20px;" onclick="clearAllTournamentData()">⚠ Опасная зона: Обнулить весь турнир</button>';
+            mainBody.appendChild(div);
+        }
+    };
+</script>
+</body>
+</html>
