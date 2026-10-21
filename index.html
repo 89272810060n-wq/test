@@ -8,13 +8,14 @@
         :root { --prm: #007bff; --suc: #28a745; --dng: #dc3545; --drk: #343a40; }
         body { font-family: -apple-system, sans-serif; margin: 10px; background: #f0f2f5; padding-bottom: 95px; }
         .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .flex-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .flex-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
         h1 { font-size: 20px; margin: 0; }
         h2 { font-size: 16px; margin: 0 0 10px 0; color: #555; }
         .btn-set { background: #e9ecef; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
         .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; background: #f8f9fa; padding: 10px; border-radius: 8px; }
         select { font-size: 16px; padding: 10px; width: 48%; border-radius: 6px; border: 1px solid #ccc; background: white; font-weight: bold; }
         .p-select { font-size: 14px; padding: 6px; width: 100%; margin-bottom: 5px; border-radius: 4px; }
+        .team-name-input { font-size: 15px; padding: 8px; width: 100%; border-radius: 6px; border: 1px solid var(--prm); font-weight: bold; margin-bottom: 8px; box-sizing: border-box; }
         .btn-box { display: flex; align-items: center; gap: 12px; }
         .btn-circle { width: 46px; height: 46px; border-radius: 50%; border: none; font-size: 24px; font-weight: bold; background: #e9ecef; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .score { font-size: 26px; font-weight: bold; min-width: 25px; text-align: center; }
@@ -34,18 +35,70 @@
         
         .judge-only { display: none; }
         body.is-judge .judge-only { display: block; }
+        body.is-judge .viewer-only { display: none; }
         .team-rating-badge { font-size: 12px; color: #666; font-weight: bold; margin-top: 2px; background: #e2e3e5; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+        /* --- Поле выбора игрока с поиском --- */
+        .pslot { margin-bottom: 6px; position: relative; }
+        .pslot-field { display: flex; gap: 6px; }
+        .pslot-input {
+            flex: 1; font-size: 14px; padding: 8px 10px; border-radius: 6px;
+            border: 1px solid #ccc; background: white; font-weight: bold; cursor: pointer;
+        }
+        .pslot-input.placeholder { color: #999; font-weight: normal; font-style: italic; }
+        .pslot-clear {
+            width: 36px; border: 1px solid #ccc; background: #fff; border-radius: 6px;
+            color: var(--dng); font-size: 16px; font-weight: bold; cursor: pointer;
+        }
+        .pslot-clear:hover { background: #ffecec; }
+        .pslot-picker {
+            position: absolute; left: 0; right: 0; top: 100%; z-index: 50;
+            margin-top: 4px; background: white; border: 1px solid var(--prm);
+            border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); overflow: hidden;
+        }
+        .pslot-search {
+            width: 100%; box-sizing: border-box; padding: 10px; border: none;
+            border-bottom: 1px solid #eee; font-size: 14px; outline: none;
+        }
+        .pslot-list { max-height: 240px; overflow-y: auto; }
+        .pslot-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 9px 12px; font-size: 14px; cursor: pointer; border-bottom: 1px solid #f3f3f3;
+        }
+        .pslot-item:hover { background: #eaf3ff; }
+        .pslot-item.locked { color: #aaa; cursor: not-allowed; background: #fafafa; }
+        .pslot-avg { font-size: 12px; color: var(--prm); font-weight: bold; }
+        .pslot-item.locked .pslot-avg { color: #bbb; }
+        .pslot-empty { padding: 12px; text-align: center; color: #999; font-size: 13px; }
+
+        /* --- Просмотр составов --- */
+        .roster-view-team { background: #f8f9fa; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+        .roster-view-team h3 { margin: 0 0 6px 0; font-size: 15px; color: var(--drk); display: flex; justify-content: space-between; align-items: center; }
+        .roster-view-rating { font-size: 12px; color: var(--prm); background: #e7f1ff; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+        .roster-view-player { font-size: 14px; padding: 4px 0; border-bottom: 1px dashed #e0e0e0; display: flex; justify-content: space-between; }
+        .roster-view-player:last-child { border-bottom: none; }
+        .roster-view-player.empty { color: #bbb; font-style: italic; }
+        .roster-view-avg { color: #666; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <div class="flex-hdr">
         <h1>🏆 Турнир по кругу ОНЛАЙН PRO</h1>
-        <button class="btn-set judge-only" onclick="toggleRosterEditor()">⚙️ Составы команд</button>
-        <button class="btn-set" style="background: #ffc107;" onclick="activateJudgeMode()">🔑 Я Судья</button>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="btn-set" onclick="toggleRosterViewer()">👁 Составы команд</button>
+            <button class="btn-set judge-only" onclick="toggleRosterEditor()">⚙️ Редактировать составы</button>
+            <button class="btn-set" style="background: #ffc107;" onclick="activateJudgeMode()">🔑 Я Судья</button>
+        </div>
     </div>
 
-    <!-- ОКНО РЕДАКТИРОВАНИЯ СОСТАВОВ ИЗ БАЗЫ (СКРЫТО ПО УМОЛЧАНИЮ) -->
+    <!-- ПРОСМОТР СОСТАВОВ (виден всем) -->
+    <div class="card" id="roster-viewer-card" style="display: none; border: 2px solid var(--drk);">
+        <h2>👁 Составы команд</h2>
+        <div id="roster-viewer-container">Загрузка...</div>
+    </div>
+
+    <!-- ОКНО РЕДАКТИРОВАНИЯ СОСТАВОВ ИЗ БАЗЫ (только Судья) -->
     <div class="card judge-only" id="roster-editor-card" style="display: none; border: 2px solid var(--prm);">
         <h2>⚙ Формирование составов на игровой день</h2>
         <div id="roster-selectors-container"></div>
@@ -58,7 +111,7 @@
         <div class="row" style="flex-direction: column; align-items: stretch; gap: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                 <div>
-                    <select id="t1" onchange="resetScorers()"></select>
+                    <select id="t1" onchange="onTeam1Change()"></select>
                     <div id="t1-rating-display" class="team-rating-badge">Рейтинг: 0.00</div>
                 </div>
                 <div class="btn-box">
@@ -75,7 +128,7 @@
         <div class="row" style="flex-direction: column; align-items: stretch; gap: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                 <div>
-                    <select id="t2" onchange="resetScorers()"></select>
+                    <select id="t2" onchange="onTeam2Change()"></select>
                     <div id="t2-rating-display" class="team-rating-badge">Рейтинг: 0.00</div>
                 </div>
                 <div class="btn-box">
@@ -98,7 +151,10 @@
             <thead>
                 <tr>
                     <th style="text-align:left; padding-left:10px;">Команда</th>
-                    <th>В</th><th>Н</th><th>П</th><th>Мячи</th><th>Очки</th>
+                    <th>В</th><th>Н</th><th>П</th><th>Мячи</th>
+                    <th>Разница</th>
+                    <th>Рейтинг</th>
+                    <th>Очки</th>
                 </tr>
             </thead>
             <tbody id="table-body"></tbody>
@@ -129,18 +185,17 @@
     </div>
 
 <script>
-    const FIREBASE_URL = "https://firebasedatabase.app";
+    const FIREBASE_URL = "https://football-7ea89-default-rtdb.europe-west1.firebasedatabase.app";
 
-    let teams = ["Команда 1", "Команда 2", "Команда 3"];
+    let teams = ["Красные", "Синие", "Зеленые"];
     let teamPlayers = {
-        "Команда 1": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"],
-        "Команда 2": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"],
-        "Команда 3": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"]
+        "Красные": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"],
+        "Синие": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"],
+        "Зеленые": ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"]
     };
     
-    // Глобальная база всех игроков из сезонного приложения и их рейтингов
     let globalSeasonScorers = {}; 
-    let teamRatings = {}; // Хранение рассчитанных суммарных рейтингов команд
+    let teamRatings = {};
 
     let games = [];
     let timeMax = 7 * 60; let timeCurrent = timeMax; let clockId = null;
@@ -164,22 +219,73 @@
             alert("Режим судьи активирован!");
             let resetBtn = document.getElementById('admin-reset-box');
             if (resetBtn) resetBtn.style.display = 'block';
-            loadGlobalPlayersData(); // подгружаем базу при входе
+            // Скрываем просмотр, чтобы не мешал
+            var viewer = document.getElementById('roster-viewer-card');
+            if (viewer) viewer.style.display = 'none';
+            loadGlobalPlayersData();
             buildSelects(true);
             refresh();
+            renderRosterViewer();
         } else { alert("Неверный пароль!"); }
     }
 
-    // ЗАГРУЗКА ИГРОКОВ И ИХ СРЕДНЕГО РЕЙТИНГА ИЗ СЕЗОННОГО ПРИЛОЖЕНИЯ
+    // ---------------- ПРОСМОТР СОСТАВОВ (всем) ----------------
+    function toggleRosterViewer() {
+        var card = document.getElementById('roster-viewer-card');
+        if (!card) return;
+        card.style.display = card.style.display === 'none' ? 'block' : 'none';
+        if (card.style.display === 'block') {
+            loadGlobalPlayersData(); // чтобы рейтинги были актуальные
+            renderRosterViewer();
+        }
+    }
+
+    function renderRosterViewer() {
+        var container = document.getElementById('roster-viewer-container');
+        if (!container) return;
+
+        container.innerHTML = teams.map(function(t) {
+            var players = teamPlayers[t] || [];
+            var total = 0;
+            var playersHtml = players.map(function(p, idx) {
+                var isReal = globalSeasonScorers[p];
+                var avg = 0;
+                if (isReal) {
+                    var goals = isReal.goals || 0;
+                    var gamesCount = isReal.games || 0;
+                    var winPts = isReal.winPts || 0;
+                    avg = gamesCount > 0 ? ((winPts + goals) / gamesCount) : 0;
+                    total += avg;
+                }
+                if (!p || !isReal) {
+                    return '<div class="roster-view-player empty"><span>' + (p || ('Игрок ' + (idx + 1))) + '</span><span class="roster-view-avg">—</span></div>';
+                }
+                return '<div class="roster-view-player"><span>' + p + '</span><span class="roster-view-avg">' + avg.toFixed(2) + '</span></div>';
+            }).join('');
+
+            // Если состав пуст — заглушка
+            if (players.length === 0) playersHtml = '<div class="roster-view-player empty">Состав не задан</div>';
+
+            return '<div class="roster-view-team">' +
+                   '<h3>' + t + ' <span class="roster-view-rating">Σ ' + total.toFixed(2) + '</span></h3>' +
+                   playersHtml +
+                   '</div>';
+        }).join('');
+    }
+
+    // ---------------- РЕДАКТОР СОСТАВОВ (Судья) ----------------
     async function loadGlobalPlayersData() {
         try {
             let res = await fetch(FIREBASE_URL + "/season_archive.json");
-if (archive && archive.seasonScorers) {
+            let archive = await res.json();
+            if (archive && archive.seasonScorers) {
                 globalSeasonScorers = archive.seasonScorers;
-                buildRosterEditors(); // Перестраиваем списки выбора
+                calculateTeamRatings();
+                buildRosterEditors();
+                renderRosterViewer();
             }
         } catch (e) { 
-            console.log("Ошибка загрузки сезонных игроков"); 
+            console.log("Ошибка загрузки сезонных игроков", e); 
         }
     }
 
@@ -190,68 +296,267 @@ if (archive && archive.seasonScorers) {
         if (card.style.display === 'block') loadGlobalPlayersData();
     }
 
-    // Сборка 5 выпадающих списков выбора для каждой из 3 команд
     function buildRosterEditors() {
         var container = document.getElementById('roster-selectors-container');
         if (!container) return;
 
-        // Получаем чистый отсортированный список всех игроков из сезона
         var playerNames = Object.keys(globalSeasonScorers).sort();
         if (playerNames.length === 0) {
             container.innerHTML = "<p style='color:red; font-size:14px;'>В базе сезона еще нет игроков! Внесите хотя бы один матч в сезонном приложении.</p>";
             return;
         }
 
-        container.innerHTML = teams.map(function(t) {
-            var selectsHtml = "";
+        container.innerHTML = teams.map(function(t, teamIdx) {
+            var slotsHtml = "";
             for (var i = 0; i < 5; i++) {
                 var currentSavedPlayer = (teamPlayers[t] && teamPlayers[t][i]) ? teamPlayers[t][i] : "";
-                
-                var optionsHtml = playerNames.map(function(p) {
-                    var score = globalSeasonScorers[p].goals || 0;
-                    var gamesCount = globalSeasonScorers[p].games || 0;
-                    var winPts = globalSeasonScorers[p].winPts || 0;
-                    var avg = gamesCount > 0 ? ((winPts + score) / gamesCount) : 0;
-                    
-                    var isSelected = p === currentSavedPlayer ? "selected" : "";
-                    return '<option value="' + p + '" ' + isSelected + '>' + p + ' (Рейт: ' + avg.toFixed(2) + ')</option>';
-                }).join('');
+                var isRealPlayer = currentSavedPlayer && globalSeasonScorers[currentSavedPlayer];
+                var displayValue = isRealPlayer ? currentSavedPlayer : ("Игрок " + (i + 1));
+                var isPlaceholder = !isRealPlayer;
 
-                selectsHtml += '<select class="p-select" id="roster-select-' + t + '-' + i + '">' + optionsHtml + '</select>';
+                slotsHtml +=
+                    '<div class="pslot" data-team-idx="' + teamIdx + '" data-slot-idx="' + i + '">' +
+                        '<div class="pslot-field">' +
+                            '<input type="text" class="pslot-input' + (isPlaceholder ? ' placeholder' : '') + '" ' +
+                                   'id="roster-input-' + teamIdx + '-' + i + '" ' +
+                                   'data-value="' + (isRealPlayer ? currentSavedPlayer.replace(/"/g, '&quot;') : '') + '" ' +
+                                   'value="' + displayValue.replace(/"/g, '&quot;') + '" ' +
+                                   'readonly onclick="openSlotPicker(' + teamIdx + ',' + i + ')">' +
+                            '<button type="button" class="pslot-clear" title="Сбросить" ' +
+                                    'onclick="clearSlot(' + teamIdx + ',' + i + ')">✕</button>' +
+                        '</div>' +
+                        '<div class="pslot-picker" id="picker-' + teamIdx + '-' + i + '" style="display:none;">' +
+                            '<input type="text" class="pslot-search" placeholder="Поиск игрока..." ' +
+                                   'oninput="filterSlotPicker(' + teamIdx + ',' + i + ', this.value)" ' +
+                                   'onclick="event.stopPropagation()">' +
+                            '<div class="pslot-list" id="picker-list-' + teamIdx + '-' + i + '"></div>' +
+                        '</div>' +
+                    '</div>';
             }
 
             return '<div style="margin-bottom:15px; background:#f1f3f5; padding:10px; border-radius:8px;">' +
-                   '<h3 style="margin:0 0 8px 0; font-size:15px; color:var(--drk);">' + t + '</h3>' + selectsHtml + '</div>';
+                   '<input type="text" class="team-name-input" id="team-name-' + teamIdx + '" value="' + t.replace(/"/g, '&quot;') + '" placeholder="Название команды">' +
+                   slotsHtml + '</div>';
+        }).join('');
+
+        refreshRosterSelects();
+    }
+
+    function getSlotState() {
+        var states = [];
+        document.querySelectorAll('#roster-selectors-container .pslot').forEach(function(slotEl) {
+            var t = Number(slotEl.dataset.teamIdx);
+            var i = Number(slotEl.dataset.slotIdx);
+            var inputEl = document.getElementById('roster-input-' + t + '-' + i);
+            states.push({
+                teamIdx: t,
+                slotIdx: i,
+                el: slotEl,
+                value: inputEl ? (inputEl.dataset.value || "") : ""
+            });
+        });
+        return states;
+    }
+
+    function refreshRosterSelects() {
+        var states = getSlotState();
+        var chosenMap = {};
+        states.forEach(function(s) {
+            if (!s.value) return;
+            if (!chosenMap[s.value]) chosenMap[s.value] = [];
+            chosenMap[s.value].push(s.teamIdx + '-' + s.slotIdx);
+        });
+
+        states.forEach(function(s) {
+            var listEl = document.getElementById('picker-list-' + s.teamIdx + '-' + s.slotIdx);
+            if (listEl && listEl.parentElement.style.display !== 'none') {
+                var searchEl = document.querySelector('#picker-' + s.teamIdx + '-' + s.slotIdx + ' .pslot-search');
+                renderSlotList(s.teamIdx, s.slotIdx, searchEl ? searchEl.value : "", chosenMap);
+            }
+            var inputEl = document.getElementById('roster-input-' + s.teamIdx + '-' + s.slotIdx);
+            if (inputEl) {
+                if (s.value) {
+                    inputEl.classList.remove('placeholder');
+                    inputEl.value = s.value;
+                } else {
+                    inputEl.classList.add('placeholder');
+                    inputEl.value = "Игрок " + (s.slotIdx + 1);
+                }
+            }
+        });
+    }
+
+    function renderSlotList(teamIdx, slotIdx, filterText, chosenMap) {
+        var listEl = document.getElementById('picker-list-' + teamIdx + '-' + slotIdx);
+        if (!listEl) return;
+        var selfKey = teamIdx + '-' + slotIdx;
+        var filter = (filterText || "").toLowerCase().trim();
+
+        var names = Object.keys(globalSeasonScorers).sort().filter(function(p) {
+            if (!filter) return true;
+            return p.toLowerCase().indexOf(filter) !== -1;
+        });
+
+        if (names.length === 0) {
+            listEl.innerHTML = '<div class="pslot-empty">Ничего не найдено</div>';
+            return;
+        }
+
+        listEl.innerHTML = names.map(function(p) {
+            var score = globalSeasonScorers[p].goals || 0;
+            var gamesCount = globalSeasonScorers[p].games || 0;
+            var winPts = globalSeasonScorers[p].winPts || 0;
+            var avg = gamesCount > 0 ? ((winPts + score) / gamesCount) : 0;
+
+            var owners = chosenMap[p] || [];
+            var occupiedElsewhere = owners.some(function(k) { return k !== selfKey; });
+
+            var cls = 'pslot-item' + (occupiedElsewhere ? ' locked' : '');
+            var onclick = occupiedElsewhere ? '' : ' onclick="selectSlotPlayer(' + teamIdx + ',' + slotIdx + ', \'' + p.replace(/'/g, "\\'") + '\')"';
+            var lock = occupiedElsewhere ? ' 🔒' : '';
+
+            return '<div class="' + cls + '"' + onclick + '>' +
+                   '<span>' + p + lock + '</span>' +
+                   '<span class="pslot-avg">' + avg.toFixed(2) + '</span>' +
+                   '</div>';
         }).join('');
     }
 
-    // Сохранение и расчет общего рейтинга команды
-    function saveRosters() {
-        var newTeamPlayers = {};
-        teams.forEach(function(t) {
-            var list = [];
-            for (var i = 0; i < 5; i++) {
-                var selectEl = document.getElementById('roster-select-' + t + '-' + i);
-                if (selectEl) {
-                    list.push(selectEl.value);
-                }
-            }
-            newTeamPlayers[t] = list;
+    function openSlotPicker(teamIdx, slotIdx) {
+        document.querySelectorAll('#roster-selectors-container .pslot-picker').forEach(function(p) {
+            if (p.id !== 'picker-' + teamIdx + '-' + slotIdx) p.style.display = 'none';
         });
 
+        var picker = document.getElementById('picker-' + teamIdx + '-' + slotIdx);
+        if (!picker) return;
+        if (picker.style.display === 'block') { picker.style.display = 'none'; return; }
+        picker.style.display = 'block';
+
+        var states = getSlotState();
+        var chosenMap = {};
+        states.forEach(function(s) {
+            if (!s.value) return;
+            if (!chosenMap[s.value]) chosenMap[s.value] = [];
+            chosenMap[s.value].push(s.teamIdx + '-' + s.slotIdx);
+        });
+
+        var searchEl = picker.querySelector('.pslot-search');
+        if (searchEl) {
+            searchEl.value = '';
+            setTimeout(function() { searchEl.focus(); }, 50);
+        }
+        renderSlotList(teamIdx, slotIdx, "", chosenMap);
+    }
+
+    function filterSlotPicker(teamIdx, slotIdx, text) {
+        var states = getSlotState();
+        var chosenMap = {};
+        states.forEach(function(s) {
+            if (!s.value) return;
+            if (!chosenMap[s.value]) chosenMap[s.value] = [];
+            chosenMap[s.value].push(s.teamIdx + '-' + s.slotIdx);
+        });
+        renderSlotList(teamIdx, slotIdx, text, chosenMap);
+    }
+
+    function selectSlotPlayer(teamIdx, slotIdx, playerName) {
+        var inputEl = document.getElementById('roster-input-' + teamIdx + '-' + slotIdx);
+        if (!inputEl) return;
+
+        var states = getSlotState();
+        var selfKey = teamIdx + '-' + slotIdx;
+        var occupiedElsewhere = states.some(function(s) {
+            return s.value === playerName && (s.teamIdx + '-' + s.slotIdx) !== selfKey;
+        });
+        if (occupiedElsewhere) {
+            alert('Игрок "' + playerName + '" уже выбран в другом слоте!');
+            return;
+        }
+
+        inputEl.dataset.value = playerName;
+        inputEl.value = playerName;
+        inputEl.classList.remove('placeholder');
+
+        var picker = document.getElementById('picker-' + teamIdx + '-' + slotIdx);
+        if (picker) picker.style.display = 'none';
+
+        refreshRosterSelects();
+    }
+
+    function clearSlot(teamIdx, slotIdx) {
+        var inputEl = document.getElementById('roster-input-' + teamIdx + '-' + slotIdx);
+        if (!inputEl) return;
+        inputEl.dataset.value = '';
+        inputEl.value = "Игрок " + (slotIdx + 1);
+        inputEl.classList.add('placeholder');
+        refreshRosterSelects();
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.pslot')) {
+            document.querySelectorAll('#roster-selectors-container .pslot-picker').forEach(function(p) {
+                p.style.display = 'none';
+            });
+        }
+    });
+
+    function saveRosters() {
+        var newTeams = [];
+        var newTeamPlayers = {};
+
+        var states = getSlotState();
+        var chosen = {};
+        var duplicates = [];
+        states.forEach(function(s) {
+            if (!s.value) return;
+            if (chosen[s.value]) duplicates.push(s.value);
+            else chosen[s.value] = true;
+        });
+        if (duplicates.length > 0) {
+            var uniq = duplicates.filter(function(v, i, a) { return a.indexOf(v) === i; });
+            alert("Ошибка: игрок(и) выбраны более одного раза:\n— " + uniq.join("\n— ") +
+                  "\n\nИсправьте составы и сохраните снова.");
+            return;
+        }
+
+        teams.forEach(function(oldName, teamIdx) {
+            var nameInput = document.getElementById('team-name-' + teamIdx);
+            var newName = nameInput ? nameInput.value.trim() : oldName;
+            if (!newName) newName = oldName;
+
+            var list = [];
+            for (var i = 0; i < 5; i++) {
+                var inputEl = document.getElementById('roster-input-' + teamIdx + '-' + i);
+                var val = inputEl ? (inputEl.dataset.value || "") : "";
+                list.push(val ? val : ("Игрок " + (i + 1)));
+            }
+
+            newTeams.push(newName);
+            newTeamPlayers[newName] = list;
+
+            if (newName !== oldName) {
+                games.forEach(function(g) {
+                    if (g.t1 === oldName) g.t1 = newName;
+                    if (g.t2 === oldName) g.t2 = newName;
+                });
+            }
+        });
+
+        teams = newTeams;
         teamPlayers = newTeamPlayers;
-        calculateTeamRatings(); // Считаем сумму рейтингов состава
+
+        calculateTeamRatings();
         toggleRosterEditor();
+        renderRosterViewer();
         syncToCloud();
         refresh();
     }
 
-    // МАТЕМАТИЧЕСКИЙ РАСЧЕТ СИЛЫ КОМАНДЫ (СУММА СРЕДНИХ РЕЙТИНГОВ ИГРОКОВ)
+    // ---------------- РЕЙТИНГИ КОМАНД ----------------
     function calculateTeamRatings() {
         teams.forEach(function(t) {
             var totalRating = 0;
             var players = teamPlayers[t] || [];
-            
             players.forEach(function(p) {
                 if (globalSeasonScorers[p]) {
                     var goals = globalSeasonScorers[p].goals || 0;
@@ -269,7 +574,6 @@ if (archive && archive.seasonScorers) {
     function updateRatingDisplays() {
         var t1 = document.getElementById('t1') ? document.getElementById('t1').value : null;
         var t2 = document.getElementById('t2') ? document.getElementById('t2').value : null;
-        
         if (t1 && teamRatings[t1] !== undefined) document.getElementById('t1-rating-display').innerText = "Сила состава: " + teamRatings[t1].toFixed(2);
         if (t2 && teamRatings[t2] !== undefined) document.getElementById('t2-rating-display').innerText = "Сила состава: " + teamRatings[t2].toFixed(2);
     }
@@ -282,6 +586,38 @@ if (archive && archive.seasonScorers) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ teams, teamPlayers, teamRatings, games: cleanGames, timeCurrent })
         });
+    }
+
+    // ---------------- ВВОД МАТЧА ----------------
+    // Защита от выбора одинаковых команд
+    function onTeam1Change() {
+        var v1 = document.getElementById('t1').value;
+        var sel2 = document.getElementById('t2');
+        // Перестраиваем t2 без выбранной команды t1
+        rebuildTeamSelect(sel2, v1);
+        resetScorers();
+    }
+
+    function onTeam2Change() {
+        var v2 = document.getElementById('t2').value;
+        var sel1 = document.getElementById('t1');
+        rebuildTeamSelect(sel1, v2);
+        resetScorers();
+    }
+
+    function rebuildTeamSelect(selectEl, excludeTeam) {
+        if (!selectEl) return;
+        var currentVal = selectEl.value;
+        var html = teams
+            .filter(function(t) { return t !== excludeTeam; })
+            .map(function(t) {
+                return '<option value="' + t.replace(/"/g, '&quot;') + '">' + t + '</option>';
+            }).join('');
+        selectEl.innerHTML = html;
+        // Пытаемся сохранить текущий выбор, если он ещё доступен
+        if (currentVal && currentVal !== excludeTeam && teams.indexOf(currentVal) !== -1) {
+            selectEl.value = currentVal;
+        }
     }
 
     function openPlayerSelector(teamNum) {
@@ -348,6 +684,7 @@ if (archive && archive.seasonScorers) {
         var teamB = document.getElementById('t2').value;
         var sA = parseInt(document.getElementById('s1').innerText); 
         var sB = parseInt(document.getElementById('s2').innerText);
+        if (!teamA || !teamB) { alert("Выберите обе команды!"); return; }
         if (teamA === teamB) { alert("Ошибка: Одна и та же команда!"); return; }
 
         games.push({ 
@@ -376,6 +713,9 @@ if (archive && archive.seasonScorers) {
                     if (!clockId) { timeCurrent = cloudData.timeCurrent || timeMax; showTime(); }
                     if (!document.body.classList.contains('is-judge')) buildSelects();
                     refresh();
+                    // Обновляем просмотр для всех
+                    var viewer = document.getElementById('roster-viewer-card');
+                    if (viewer && viewer.style.display === 'block') renderRosterViewer();
                 }
             } catch (e) {}
         }, 2000);
@@ -384,7 +724,10 @@ if (archive && archive.seasonScorers) {
     function runTimer() {
         if (audioObj.state === 'suspended') audioObj.resume();
         var b = document.getElementById('timer-btn');
-b.innerText = "Старт"; 
+        if (clockId) {
+            clearInterval(clockId); 
+            clockId = null;
+            b.innerText = "Старт"; 
             b.style.background = "#28a745"; 
             syncToCloud();
         } else {
@@ -424,7 +767,8 @@ b.innerText = "Старт";
         document.getElementById('timer-display').innerText = m.toString().padStart(2,'0') + ":" + s.toString().padStart(2,'0');
     }
 
-    function buildSelects(force = false) {
+    function buildSelects(force) {
+        force = !!force;
         var select1 = document.getElementById('t1'); 
         var select2 = document.getElementById('t2');
         if (!select1 || !select2) return;
@@ -433,9 +777,8 @@ b.innerText = "Старт";
         var val1 = select1.value; 
         var val2 = select2.value;
         
-        // Восстановлена генерация тегов option для списка выбора команд
         var html = teams.map(function(t) { 
-            return '<option value="' + t + '">' + t + '</option>'; 
+            return '<option value="' + t.replace(/"/g, '&quot;') + '">' + t + '</option>'; 
         }).join('');
         
         select1.innerHTML = html; 
@@ -448,13 +791,16 @@ b.innerText = "Старт";
             if (select2.options.length > 1) select2.selectedIndex = 1; 
             resetScorers(); 
         }
+
+        // Сразу применяем защиту от одинаковых команд
+        if (select1.value) rebuildTeamSelect(select2, select1.value);
     }
 
     function refresh() {
         var data = {}; 
         var playerStats = {};
         teams.forEach(function(t) {
-            data[t] = { w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+            data[t] = { w: 0, d: 0, l: 0, gf: 0, ga: 0, diff: 0, pts: 0, rating: teamRatings[t] || 0 };
             var players = teamPlayers[t] || [];
             players.forEach(function(p) { playerStats[p] = 0; });
         });
@@ -474,20 +820,32 @@ b.innerText = "Старт";
             }
         });
 
-        // Восстановлен вывод основной турнирной таблицы команд дня
-        var order = [...teams].sort(function(x, y) { return (data[y].pts !== data[x].pts) ? data[y].pts - data[x].pts : data[y].gf - data[x].gf; });
+        teams.forEach(function(t) { data[t].diff = data[t].gf - data[t].ga; });
+
+        var order = [...teams].sort(function(x, y) {
+            if (data[y].pts !== data[x].pts) return data[y].pts - data[x].pts;
+            if (data[y].diff !== data[x].diff) return data[y].diff - data[x].diff;
+            if (data[y].gf !== data[x].gf) return data[y].gf - data[x].gf;
+            return data[y].rating - data[x].rating;
+        });
+
         document.getElementById('table-body').innerHTML = order.map(function(t) { 
+            var diffVal = data[t].diff;
+            var diffText = (diffVal > 0 ? '+' : '') + diffVal;
+            var diffColor = diffVal > 0 ? 'var(--suc)' : (diffVal < 0 ? 'var(--dng)' : '#666');
+
             return '<tr>' +
                 '<td style="text-align:left; padding-left:10px; font-weight:bold;">' + t + '</td>' +
                 '<td>' + data[t].w + '</td>' +
                 '<td>' + data[t].d + '</td>' +
                 '<td>' + data[t].l + '</td>' +
                 '<td style="color:#666;"><b>' + data[t].gf + '</b>:' + data[t].ga + '</td>' +
+                '<td style="font-weight:bold; color:' + diffColor + ';">' + diffText + '</td>' +
+                '<td style="font-weight:bold; color:var(--prm);">' + data[t].rating.toFixed(2) + '</td>' +
                 '<td style="font-weight:bold; color:var(--prm); font-size:16px;">' + data[t].pts + '</td>' +
             '</tr>';
         }).join('');
 
-        // Восстановлен вывод истории матчей с отображением силы составов
         var isJ = document.body.classList.contains('is-judge');
         document.getElementById('history-list').innerHTML = games.length === 0 ? '<p style="text-align:center; color:#888;">Матчей пока нет</p>' : 
             games.map(function(g, idx) {
@@ -504,7 +862,6 @@ b.innerText = "Старт";
                     '</div>';
             }).join('');
 
-        // Восстановлен вывод таблицы бомбардиров игрового дня
         var scorersOrder = Object.keys(playerStats).map(function(n) { return { name: n, goals: playerStats[n] }; }).filter(function(p) { return p.goals > 0; }).sort(function(a, b) { return b.goals - a.goals; });
         document.getElementById('scorers-body').innerHTML = scorersOrder.length === 0 ? '<tr><td colspan="3" style="color:#888; padding:10px;">Голов пока не было</td></tr>' : 
             scorersOrder.map(function(p, idx) { 
@@ -516,6 +873,48 @@ b.innerText = "Старт";
             }).join('');
     }
 
+    async function clearAllTournamentData() {
+        if (!document.body.classList.contains('is-judge')) return;
+        if (!confirm("ВНИМАНИЕ! Это удалит ВСЕ матчи, а также СБРОСИТ СОСТАВЫ команд (все игроки станут «Игрок 1..5»). Продолжить?")) return;
+
+        games = [];
+        timeCurrent = timeMax;
+
+        var freshTeamPlayers = {};
+        teams.forEach(function(t) {
+            freshTeamPlayers[t] = ["Игрок 1", "Игрок 2", "Игрок 3", "Игрок 4", "Игрок 5"];
+        });
+        teamPlayers = freshTeamPlayers;
+        teamRatings = {};
+
+        var el1 = document.getElementById('t1-rating-display');
+        var el2 = document.getElementById('t2-rating-display');
+        if (el1) el1.innerText = "Сила состава: 0.00";
+        if (el2) el2.innerText = "Сила состава: 0.00";
+
+        resetScorers();
+
+        try {
+            await fetch(FIREBASE_URL + "/tournament.json", {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    teams: teams,
+                    teamPlayers: teamPlayers,
+                    teamRatings: {},
+                    games: [],
+                    timeCurrent: timeMax
+                })
+            });
+            alert("Турнир обнулён. Составы команд сброшены — сформируйте их заново через «⚙️ Редактировать составы».");
+            refresh();
+            showTime();
+            renderRosterViewer();
+        } catch (e) {
+            alert("Ошибка соединения с базой данных.");
+        }
+    }
+
     window.onload = function() { 
         buildSelects(); 
         showTime(); 
@@ -523,7 +922,6 @@ b.innerText = "Старт";
         startCloudListener(); 
         loadGlobalPlayersData();
         
-        // Динамическое создание скрытой кнопки обнуления в самом низу страницы
         var mainBody = document.body;
         if (mainBody) {
             var div = document.createElement('div'); 
