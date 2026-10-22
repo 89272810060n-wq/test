@@ -79,6 +79,30 @@
         .roster-view-player:last-child { border-bottom: none; }
         .roster-view-player.empty { color: #bbb; font-style: italic; }
         .roster-view-avg { color: #666; font-size: 12px; }
+
+        /* --- Перетасовка составов --- */
+        .shuffle-wrap { margin-top: 10px; }
+        .btn-shuffle {
+            width: 100%; padding: 14px; font-size: 16px; font-weight: bold;
+            background: #6f42c1; color: white; border: none; border-radius: 8px;
+            cursor: pointer; margin-top: 8px;
+        }
+        .btn-shuffle:active { background: #5a35a0; }
+        #shuffle-result {
+            margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+            background: #f3efff; border: 1px solid #d8c8f4; font-size: 13px;
+            line-height: 1.5;
+        }
+        #shuffle-result.ok { background: #eafaf0; border-color: #b9e6c8; }
+        #shuffle-result.warn { background: #fff3cd; border-color: #ffe69c; }
+        #shuffle-result b { color: var(--drk); }
+        #shuffle-result hr { border: none; border-top: 1px solid #d8c8f4; margin: 8px 0; }
+        .btn-reset-manual {
+            margin-top: 8px; padding: 6px 12px; background: #fff;
+            border: 1px solid #6f42c1; color: #6f42c1; border-radius: 6px;
+            font-weight: bold; cursor: pointer; font-size: 12px;
+        }
+        .btn-reset-manual:hover { background: #f3efff; }
     </style>
 </head>
 <body>
@@ -102,6 +126,13 @@
     <div class="card judge-only" id="roster-editor-card" style="display: none; border: 2px solid var(--prm);">
         <h2>⚙ Формирование составов на игровой день</h2>
         <div id="roster-selectors-container"></div>
+
+        <!-- Перетасовка -->
+        <div class="shuffle-wrap">
+            <button class="btn-shuffle" onclick="shuffleRosters()">🎲 Перетасовать составы</button>
+            <div id="shuffle-result" style="display:none;"></div>
+        </div>
+
         <button class="btn-main" style="background: var(--suc);" onclick="saveRosters()">Применить и сохранить составы</button>
     </div>
 
@@ -196,6 +227,7 @@
     
     let globalSeasonScorers = {}; 
     let teamRatings = {};
+    let manualRatings = {}; // Временные ручные рейтинги для балансировки (не сохраняются в Firebase)
 
     let games = [];
     let timeMax = 7 * 60; let timeCurrent = timeMax; let clockId = null;
@@ -219,7 +251,6 @@
             alert("Режим судьи активирован!");
             let resetBtn = document.getElementById('admin-reset-box');
             if (resetBtn) resetBtn.style.display = 'block';
-            // Скрываем просмотр, чтобы не мешал
             var viewer = document.getElementById('roster-viewer-card');
             if (viewer) viewer.style.display = 'none';
             loadGlobalPlayersData();
@@ -229,13 +260,13 @@
         } else { alert("Неверный пароль!"); }
     }
 
-    // ---------------- ПРОСМОТР СОСТАВОВ (всем) ----------------
+    // ---------------- ПРОСМОТР СОСТАВОВ ----------------
     function toggleRosterViewer() {
         var card = document.getElementById('roster-viewer-card');
         if (!card) return;
         card.style.display = card.style.display === 'none' ? 'block' : 'none';
         if (card.style.display === 'block') {
-            loadGlobalPlayersData(); // чтобы рейтинги были актуальные
+            loadGlobalPlayersData();
             renderRosterViewer();
         }
     }
@@ -263,7 +294,6 @@
                 return '<div class="roster-view-player"><span>' + p + '</span><span class="roster-view-avg">' + avg.toFixed(2) + '</span></div>';
             }).join('');
 
-            // Если состав пуст — заглушка
             if (players.length === 0) playersHtml = '<div class="roster-view-player empty">Состав не задан</div>';
 
             return '<div class="roster-view-team">' +
@@ -273,7 +303,7 @@
         }).join('');
     }
 
-    // ---------------- РЕДАКТОР СОСТАВОВ (Судья) ----------------
+    // ---------------- РЕДАКТОР СОСТАВОВ ----------------
     async function loadGlobalPlayersData() {
         try {
             let res = await fetch(FIREBASE_URL + "/season_archive.json");
@@ -293,7 +323,10 @@
         var card = document.getElementById('roster-editor-card');
         if (!card) return;
         card.style.display = card.style.display === 'none' ? 'block' : 'none';
-        if (card.style.display === 'block') loadGlobalPlayersData();
+        if (card.style.display === 'block') {
+            manualRatings = {}; // сброс ручных рейтингов при открытии
+            loadGlobalPlayersData();
+        }
     }
 
     function buildRosterEditors() {
@@ -340,6 +373,9 @@
         }).join('');
 
         refreshRosterSelects();
+
+        var resEl = document.getElementById('shuffle-result');
+        if (resEl) { resEl.style.display = 'none'; resEl.innerHTML = ''; resEl.className = ''; }
     }
 
     function getSlotState() {
@@ -500,6 +536,188 @@
         }
     });
 
+    // ---------------- ПЕРЕТАСОВКА ----------------
+    function shuffleArray(arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+        }
+        return arr;
+    }
+
+    // Возвращает рейтинг игрока: сначала ручной (если задан), иначе из статистики сезона
+    function playerAvgRating(name) {
+        if (manualRatings[name] !== undefined) return manualRatings[name];
+        var d = globalSeasonScorers[name];
+        if (!d) return 0;
+        var goals = d.goals || 0;
+        var games = d.games || 0;
+        var winPts = d.winPts || 0;
+        return games > 0 ? ((winPts + goals) / games) : 0;
+    }
+
+    function resetManualRatings() {
+        manualRatings = {};
+        var resEl = document.getElementById('shuffle-result');
+        if (resEl) {
+            resEl.style.display = 'none';
+            resEl.innerHTML = '';
+            resEl.className = '';
+        }
+    }
+
+    function shuffleRosters() {
+        var states = getSlotState();
+        var selected = states.filter(function(s) { return !!s.value; }).map(function(s) { return s.value; });
+
+        var uniq = [];
+        var seen = {};
+        selected.forEach(function(p) {
+            if (!seen[p]) { seen[p] = true; uniq.push(p); }
+        });
+
+        var need = teams.length * 5;
+        if (uniq.length < need) {
+            alert("Для перетасовки нужно выбрать ровно " + need + " игроков (по 5 на каждую команду).\nСейчас выбрано уникальных: " + uniq.length + ".\n\nЗаполните все слоты вручную, затем нажмите «Перетасовать».");
+            return;
+        }
+        if (uniq.length > need) {
+            alert("Выбрано больше " + need + " игроков — так быть не должно. Уберите лишних.");
+            return;
+        }
+
+        // --- Спросить рейтинги для игроков с нулевым/отсутствующим рейтингом ---
+        var needRating = uniq.filter(function(p) {
+            return playerAvgRating(p) === 0 && manualRatings[p] === undefined;
+        });
+
+        if (needRating.length > 0) {
+            var listStr = needRating.map(function(p, i) { return (i+1) + ". " + p; }).join("\n");
+            var doAsk = confirm(
+                "У следующих игроков нет статистики (рейтинг 0):\n\n" +
+                listStr + "\n\n" +
+                "OK — ввести рейтинги по очереди\n" +
+                "Отмена — пропустить всех (использовать 0)"
+            );
+
+            if (doAsk) {
+                for (var idx = 0; idx < needRating.length; idx++) {
+                    var pName = needRating[idx];
+                    var input = prompt(
+                        '(' + (idx+1) + '/' + needRating.length + ') Рейтинг для игрока "' + pName + '"\n' +
+                        '(можно вводить с точкой или запятой; пусто = 0):',
+                        ''
+                    );
+                    var val = 0;
+                    if (input !== null && input.trim() !== '') {
+                        var parsed = parseFloat(input.replace(',', '.'));
+                        if (!isNaN(parsed) && parsed >= 0) val = parsed;
+                    }
+                    manualRatings[pName] = val;
+                }
+            } else {
+                needRating.forEach(function(p) { manualRatings[p] = 0; });
+            }
+        }
+
+        // --- Перетасовка ---
+        var MAX_TRIES = 3000;
+        var TARGET_SPREAD = 0.10;
+        var best = null;
+
+        for (var attempt = 0; attempt < MAX_TRIES; attempt++) {
+            var pool = uniq.slice();
+            shuffleArray(pool);
+
+            var groups = [];
+            var sums = [];
+            for (var t = 0; t < teams.length; t++) {
+                var group = pool.slice(t * 5, (t + 1) * 5);
+                groups.push(group);
+                var s = 0;
+                for (var k = 0; k < group.length; k++) s += playerAvgRating(group[k]);
+                sums.push(s);
+            }
+
+            var maxS = Math.max.apply(null, sums);
+            var minS = Math.min.apply(null, sums);
+            var spread = minS > 0 ? (maxS - minS) / minS : (maxS > 0 ? Infinity : 0);
+
+            if (!best || spread < best.spread) {
+                best = { groups: groups, sums: sums, spread: spread };
+            }
+            if (spread <= TARGET_SPREAD) break;
+        }
+
+        // Применяем лучший вариант
+        best.groups.forEach(function(group, teamIdx) {
+            for (var i = 0; i < 5; i++) {
+                var inputEl = document.getElementById('roster-input-' + teamIdx + '-' + i);
+                if (!inputEl) continue;
+                var player = group[i];
+                inputEl.dataset.value = player || '';
+                inputEl.value = player || ("Игрок " + (i + 1));
+                if (player) inputEl.classList.remove('placeholder');
+                else inputEl.classList.add('placeholder');
+            }
+        });
+
+        refreshRosterSelects();
+
+        // --- Результат ---
+        var resEl = document.getElementById('shuffle-result');
+        if (!resEl) return;
+        resEl.style.display = 'block';
+
+        var lines = [];
+        lines.push("🎲 <b>Перетасовка выполнена</b>");
+
+        // Какие рейтинги были заданы вручную (для балансировки)
+        var manualList = uniq.filter(function(p) { return manualRatings[p] !== undefined; });
+        if (manualList.length > 0) {
+            lines.push("");
+            lines.push("📝 <b>Рейтинги для балансировки (в этой сессии):</b>");
+            manualList.forEach(function(p) {
+                var v = manualRatings[p];
+                var note = (v === 0 ? " <i>(пропущен, используется 0)</i>" : " <i>(введён вручную)</i>");
+                lines.push("&nbsp;&nbsp;" + p + " → <b>" + v.toFixed(2) + "</b>" + note);
+            });
+        }
+
+        lines.push("");
+        lines.push("<b>Составы:</b>");
+        for (var t2 = 0; t2 < teams.length; t2++) {
+            lines.push("<b>" + teams[t2] + "</b> (Σ баланс " + best.sums[t2].toFixed(2) + "): " + best.groups[t2].join(", "));
+        }
+
+        lines.push("");
+        var spreadPct = (best.spread * 100);
+        if (best.spread <= TARGET_SPREAD) {
+            lines.push("✅ Разброс сумм: <b>" + spreadPct.toFixed(1) + "%</b> — укладывается в 10%.");
+            resEl.className = 'ok';
+        } else if (!isFinite(best.spread)) {
+            lines.push("⚠ Не удалось вычислить разброс (у всех рейтинги 0). Задайте рейтинги вручную.");
+            resEl.className = 'warn';
+        } else {
+            lines.push("⚠ Не удалось достичь разброса ≤10% за " + MAX_TRIES + " попыток. Лучший вариант: <b>" + spreadPct.toFixed(1) + "%</b>.");
+            lines.push("Нажмите «Перетасовать» ещё раз или задайте рейтинги вручную.");
+            resEl.className = 'warn';
+        }
+
+        lines.push("");
+        lines.push("<i>Ручные рейтинги используются только для балансировки. Официальная «сила состава» в таблице считается по реальной статистике сезона.</i>");
+
+        if (manualList.length > 0) {
+            lines.push('<button type="button" class="btn-reset-manual" onclick="resetManualRatings()">🔄 Сбросить ручные рейтинги</button>');
+        }
+
+        lines.push("<hr>");
+        lines.push("Если результат нравится — нажмите «Применить и сохранить составы».");
+
+        resEl.innerHTML = lines.join('<br>');
+    }
+
+    // ---------------- СОХРАНЕНИЕ СОСТАВОВ ----------------
     function saveRosters() {
         var newTeams = [];
         var newTeamPlayers = {};
@@ -513,8 +731,8 @@
             else chosen[s.value] = true;
         });
         if (duplicates.length > 0) {
-            var uniq = duplicates.filter(function(v, i, a) { return a.indexOf(v) === i; });
-            alert("Ошибка: игрок(и) выбраны более одного раза:\n— " + uniq.join("\n— ") +
+            var uniqDup = duplicates.filter(function(v, i, a) { return a.indexOf(v) === i; });
+            alert("Ошибка: игрок(и) выбраны более одного раза:\n— " + uniqDup.join("\n— ") +
                   "\n\nИсправьте составы и сохраните снова.");
             return;
         }
@@ -553,6 +771,8 @@
     }
 
     // ---------------- РЕЙТИНГИ КОМАНД ----------------
+    // ВНИМАНИЕ: эта функция использует ТОЛЬКО статистику сезона.
+    // manualRatings здесь не применяются — они только для балансировки.
     function calculateTeamRatings() {
         teams.forEach(function(t) {
             var totalRating = 0;
@@ -589,11 +809,9 @@
     }
 
     // ---------------- ВВОД МАТЧА ----------------
-    // Защита от выбора одинаковых команд
     function onTeam1Change() {
         var v1 = document.getElementById('t1').value;
         var sel2 = document.getElementById('t2');
-        // Перестраиваем t2 без выбранной команды t1
         rebuildTeamSelect(sel2, v1);
         resetScorers();
     }
@@ -614,7 +832,6 @@
                 return '<option value="' + t.replace(/"/g, '&quot;') + '">' + t + '</option>';
             }).join('');
         selectEl.innerHTML = html;
-        // Пытаемся сохранить текущий выбор, если он ещё доступен
         if (currentVal && currentVal !== excludeTeam && teams.indexOf(currentVal) !== -1) {
             selectEl.value = currentVal;
         }
@@ -713,7 +930,6 @@
                     if (!clockId) { timeCurrent = cloudData.timeCurrent || timeMax; showTime(); }
                     if (!document.body.classList.contains('is-judge')) buildSelects();
                     refresh();
-                    // Обновляем просмотр для всех
                     var viewer = document.getElementById('roster-viewer-card');
                     if (viewer && viewer.style.display === 'block') renderRosterViewer();
                 }
@@ -792,7 +1008,6 @@
             resetScorers(); 
         }
 
-        // Сразу применяем защиту от одинаковых команд
         if (select1.value) rebuildTeamSelect(select2, select1.value);
     }
 
@@ -886,6 +1101,7 @@
         });
         teamPlayers = freshTeamPlayers;
         teamRatings = {};
+        manualRatings = {};
 
         var el1 = document.getElementById('t1-rating-display');
         var el2 = document.getElementById('t2-rating-display');
