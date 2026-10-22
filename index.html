@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+-<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -46,11 +46,13 @@
             border: 1px solid #ccc; background: white; font-weight: bold; cursor: pointer;
         }
         .pslot-input.placeholder { color: #999; font-weight: normal; font-style: italic; }
+        .pslot-input:disabled { background: #f0f0f0; color: #bbb; cursor: not-allowed; }
         .pslot-clear {
             width: 36px; border: 1px solid #ccc; background: #fff; border-radius: 6px;
             color: var(--dng); font-size: 16px; font-weight: bold; cursor: pointer;
         }
         .pslot-clear:hover { background: #ffecec; }
+        .pslot-clear:disabled { color: #ccc; cursor: not-allowed; }
         .pslot-picker {
             position: absolute; left: 0; right: 0; top: 100%; z-index: 50;
             margin-top: 4px; background: white; border: 1px solid var(--prm);
@@ -78,6 +80,7 @@
         .roster-view-player { font-size: 14px; padding: 4px 0; border-bottom: 1px dashed #e0e0e0; display: flex; justify-content: space-between; }
         .roster-view-player:last-child { border-bottom: none; }
         .roster-view-player.empty { color: #bbb; font-style: italic; }
+        .roster-view-player.autogoal { color: #999; font-style: italic; border-top: 1px dashed #ccc; margin-top: 4px; }
         .roster-view-avg { color: #666; font-size: 12px; }
 
         /* --- Перетасовка составов --- */
@@ -103,6 +106,16 @@
             font-weight: bold; cursor: pointer; font-size: 12px;
         }
         .btn-reset-manual:hover { background: #f3efff; }
+
+        /* --- Кнопка «Автогол» в панели ввода --- */
+        .btn-autogoal {
+            display: inline-block; margin-top: 6px;
+            padding: 6px 12px; font-size: 13px; font-weight: bold;
+            background: #fff3cd; color: #8a5a00; border: 1px solid #ffd75e;
+            border-radius: 6px; cursor: pointer;
+        }
+        .btn-autogoal:hover { background: #ffe9a8; }
+        .btn-autogoal:active { background: #ffd75e; }
     </style>
 </head>
 <body>
@@ -144,6 +157,7 @@
                 <div>
                     <select id="t1" onchange="onTeam1Change()"></select>
                     <div id="t1-rating-display" class="team-rating-badge">Рейтинг: 0.00</div>
+                    <button type="button" class="btn-autogoal" onclick="addAutogoal(1)" title="Гол засчитан этой команде, автор — Автогол (соперник забил в свои)">⚽ Автогол → этой команде</button>
                 </div>
                 <div class="btn-box">
                     <button class="btn-circle" onclick="changeVal('s1', -1)">-</button>
@@ -161,6 +175,7 @@
                 <div>
                     <select id="t2" onchange="onTeam2Change()"></select>
                     <div id="t2-rating-display" class="team-rating-badge">Рейтинг: 0.00</div>
+                    <button type="button" class="btn-autogoal" onclick="addAutogoal(2)" title="Гол засчитан этой команде, автор — Автогол (соперник забил в свои)">⚽ Автогол → этой команде</button>
                 </div>
                 <div class="btn-box">
                     <button class="btn-circle" onclick="changeVal('s2', -1)">-</button>
@@ -217,6 +232,7 @@
 
 <script>
     const FIREBASE_URL = "https://football-7ea89-default-rtdb.europe-west1.firebasedatabase.app";
+    const AUTOGOAL = "Автогол"; // Специальный ключ в таблице бомбардиров
 
     let teams = ["Красные", "Синие", "Зеленые"];
     let teamPlayers = {
@@ -227,11 +243,15 @@
     
     let globalSeasonScorers = {}; 
     let teamRatings = {};
-    let manualRatings = {}; // Временные ручные рейтинги для балансировки (не сохраняются в Firebase)
+    let manualRatings = {};
 
     let games = [];
     let timeMax = 7 * 60; let timeCurrent = timeMax; let clockId = null;
     let currentMatchScorers1 = []; let currentMatchScorers2 = [];
+    // Счётчики автоголов в ТЕКУЩЕМ матче:
+    // currentMatchAutogoals1 — сколько автоголов засчитано команде t1 (соперник забил в свои)
+    // currentMatchAutogoals2 — сколько автоголов засчитано команде t2
+    let currentMatchAutogoals1 = 0; let currentMatchAutogoals2 = 0;
 
     const audioObj = new (window.AudioContext || window.webkitAudioContext)();
     function beep() {
@@ -276,7 +296,7 @@
         if (!container) return;
 
         container.innerHTML = teams.map(function(t) {
-            var players = teamPlayers[t] || [];
+            var players = (teamPlayers[t] || []).filter(function(p) { return p !== AUTOGOAL; });
             var total = 0;
             var playersHtml = players.map(function(p, idx) {
                 var isReal = globalSeasonScorers[p];
@@ -324,7 +344,7 @@
         if (!card) return;
         card.style.display = card.style.display === 'none' ? 'block' : 'none';
         if (card.style.display === 'block') {
-            manualRatings = {}; // сброс ручных рейтингов при открытии
+            manualRatings = {};
             loadGlobalPlayersData();
         }
     }
@@ -333,7 +353,7 @@
         var container = document.getElementById('roster-selectors-container');
         if (!container) return;
 
-        var playerNames = Object.keys(globalSeasonScorers).sort();
+        var playerNames = Object.keys(globalSeasonScorers).filter(function(p) { return p !== AUTOGOAL; }).sort();
         if (playerNames.length === 0) {
             container.innerHTML = "<p style='color:red; font-size:14px;'>В базе сезона еще нет игроков! Внесите хотя бы один матч в сезонном приложении.</p>";
             return;
@@ -343,6 +363,7 @@
             var slotsHtml = "";
             for (var i = 0; i < 5; i++) {
                 var currentSavedPlayer = (teamPlayers[t] && teamPlayers[t][i]) ? teamPlayers[t][i] : "";
+                if (currentSavedPlayer === AUTOGOAL) currentSavedPlayer = "";
                 var isRealPlayer = currentSavedPlayer && globalSeasonScorers[currentSavedPlayer];
                 var displayValue = isRealPlayer ? currentSavedPlayer : ("Игрок " + (i + 1));
                 var isPlaceholder = !isRealPlayer;
@@ -367,6 +388,15 @@
                     '</div>';
             }
 
+            // 6-й слот — «Автогол», заблокирован для выбора, отображается отдельно
+            slotsHtml +=
+                '<div class="pslot pslot-autogoal" style="opacity:0.7;">' +
+                    '<div class="pslot-field">' +
+                        '<input type="text" class="pslot-input placeholder" disabled value="' + AUTOGOAL + ' (не выбирается)">' +
+                        '<button type="button" class="pslot-clear" disabled>🔒</button>' +
+                    '</div>' +
+                '</div>';
+
             return '<div style="margin-bottom:15px; background:#f1f3f5; padding:10px; border-radius:8px;">' +
                    '<input type="text" class="team-name-input" id="team-name-' + teamIdx + '" value="' + t.replace(/"/g, '&quot;') + '" placeholder="Название команды">' +
                    slotsHtml + '</div>';
@@ -380,7 +410,7 @@
 
     function getSlotState() {
         var states = [];
-        document.querySelectorAll('#roster-selectors-container .pslot').forEach(function(slotEl) {
+        document.querySelectorAll('#roster-selectors-container .pslot:not(.pslot-autogoal)').forEach(function(slotEl) {
             var t = Number(slotEl.dataset.teamIdx);
             var i = Number(slotEl.dataset.slotIdx);
             var inputEl = document.getElementById('roster-input-' + t + '-' + i);
@@ -428,7 +458,9 @@
         var selfKey = teamIdx + '-' + slotIdx;
         var filter = (filterText || "").toLowerCase().trim();
 
-        var names = Object.keys(globalSeasonScorers).sort().filter(function(p) {
+        var names = Object.keys(globalSeasonScorers).filter(function(p) {
+            return p !== AUTOGOAL;
+        }).sort().filter(function(p) {
             if (!filter) return true;
             return p.toLowerCase().indexOf(filter) !== -1;
         });
@@ -545,8 +577,8 @@
         return arr;
     }
 
-    // Возвращает рейтинг игрока: сначала ручной (если задан), иначе из статистики сезона
     function playerAvgRating(name) {
+        if (name === AUTOGOAL) return 0;
         if (manualRatings[name] !== undefined) return manualRatings[name];
         var d = globalSeasonScorers[name];
         if (!d) return 0;
@@ -586,7 +618,6 @@
             return;
         }
 
-        // --- Спросить рейтинги для игроков с нулевым/отсутствующим рейтингом ---
         var needRating = uniq.filter(function(p) {
             return playerAvgRating(p) === 0 && manualRatings[p] === undefined;
         });
@@ -620,7 +651,6 @@
             }
         }
 
-        // --- Перетасовка ---
         var MAX_TRIES = 3000;
         var TARGET_SPREAD = 0.10;
         var best = null;
@@ -649,7 +679,6 @@
             if (spread <= TARGET_SPREAD) break;
         }
 
-        // Применяем лучший вариант
         best.groups.forEach(function(group, teamIdx) {
             for (var i = 0; i < 5; i++) {
                 var inputEl = document.getElementById('roster-input-' + teamIdx + '-' + i);
@@ -664,7 +693,6 @@
 
         refreshRosterSelects();
 
-        // --- Результат ---
         var resEl = document.getElementById('shuffle-result');
         if (!resEl) return;
         resEl.style.display = 'block';
@@ -672,7 +700,6 @@
         var lines = [];
         lines.push("🎲 <b>Перетасовка выполнена</b>");
 
-        // Какие рейтинги были заданы вручную (для балансировки)
         var manualList = uniq.filter(function(p) { return manualRatings[p] !== undefined; });
         if (manualList.length > 0) {
             lines.push("");
@@ -771,14 +798,12 @@
     }
 
     // ---------------- РЕЙТИНГИ КОМАНД ----------------
-    // ВНИМАНИЕ: эта функция использует ТОЛЬКО статистику сезона.
-    // manualRatings здесь не применяются — они только для балансировки.
     function calculateTeamRatings() {
         teams.forEach(function(t) {
             var totalRating = 0;
             var players = teamPlayers[t] || [];
             players.forEach(function(p) {
-                if (globalSeasonScorers[p]) {
+                if (globalSeasonScorers[p] && p !== AUTOGOAL) {
                     var goals = globalSeasonScorers[p].goals || 0;
                     var gamesCount = globalSeasonScorers[p].games || 0;
                     var winPts = globalSeasonScorers[p].winPts || 0;
@@ -853,11 +878,29 @@
     }
 
     function addGoalViaTap(teamNum, playerName) {
+        if (playerName === AUTOGOAL) {
+            alert("Автогол добавляется отдельной кнопкой «⚽ Автогол → этой команде».");
+            return;
+        }
         var scoreNode = document.getElementById('s' + teamNum);
         var currentScore = parseInt(scoreNode.innerText);
         scoreNode.innerText = currentScore + 1;
         if (teamNum === 1) currentMatchScorers1.push(playerName);
         else currentMatchScorers2.push(playerName);
+        document.getElementById('players-selector-' + teamNum).style.display = 'none';
+        reviewCurrentScorers();
+    }
+
+    // Засчитать автогол КОМАНДЕ teamNum. Гол идёт в её счёт, автор — «Автогол».
+    // По футбольным правилам это значит: соперник забил в свои ворота, гол в пользу teamNum.
+    function addAutogoal(teamNum) {
+        var scoreNode = document.getElementById('s' + teamNum);
+        var currentScore = parseInt(scoreNode.innerText);
+        scoreNode.innerText = currentScore + 1;
+
+        if (teamNum === 1) currentMatchAutogoals1++;
+        else currentMatchAutogoals2++;
+
         document.getElementById('players-selector-' + teamNum).style.display = 'none';
         reviewCurrentScorers();
     }
@@ -869,25 +912,60 @@
         var newScore = currentScore + delta; 
         if (newScore < 0) return;
         node.innerText = newScore;
-        if (id === 's1') currentMatchScorers1.pop();
-        else if (id === 's2') currentMatchScorers2.pop();
+
+        // При отмене гола: сначала убираем автогол, если он есть, потом обычный гол
+        if (id === 's1') {
+            if (currentMatchAutogoals1 > 0 && currentMatchAutogoals1 >= currentMatchScorers1.length) {
+                // нет смысла сопоставлять — просто уменьшаем ту категорию, которая больше
+            }
+            // Приоритет: убираем последний добавленный тип.
+            // Простая логика: если автоголов больше нуля и последний добавленный "тип" неизвестен,
+            // убираем автогол, если автоголов не меньше, чем обычных голов. Иначе обычный.
+            if (currentMatchAutogoals1 > 0 && currentMatchAutogoals1 >= currentMatchScorers1.length) {
+                currentMatchAutogoals1--;
+            } else if (currentMatchScorers1.length > 0) {
+                currentMatchScorers1.pop();
+            } else if (currentMatchAutogoals1 > 0) {
+                currentMatchAutogoals1--;
+            }
+        } else if (id === 's2') {
+            if (currentMatchAutogoals2 > 0 && currentMatchAutogoals2 >= currentMatchScorers2.length) {
+                currentMatchAutogoals2--;
+            } else if (currentMatchScorers2.length > 0) {
+                currentMatchScorers2.pop();
+            } else if (currentMatchAutogoals2 > 0) {
+                currentMatchAutogoals2--;
+            }
+        }
+
         reviewCurrentScorers();
     }
 
     function reviewCurrentScorers() {
         var reviewNode = document.getElementById('current-scorers-review'); 
         if (!reviewNode) return;
-        if (currentMatchScorers1.length === 0 && currentMatchScorers2.length === 0) { reviewNode.style.display = 'none'; return; }
+        var empty = currentMatchScorers1.length === 0 && currentMatchScorers2.length === 0
+                 && currentMatchAutogoals1 === 0 && currentMatchAutogoals2 === 0;
+        if (empty) { reviewNode.style.display = 'none'; return; }
+
         var t1Name = document.getElementById('t1').value; 
         var t2Name = document.getElementById('t2').value;
+
+        function describe(scorers, autogoals) {
+            var parts = scorers.slice();
+            for (var i = 0; i < autogoals; i++) parts.push(AUTOGOAL);
+            return parts.length ? parts.join(', ') : '—';
+        }
+
         reviewNode.innerHTML = '<b>Авторы голов текущего матча:</b><br>' + 
-            t1Name + ': ' + (currentMatchScorers1.join(', ') || '—') + '<br>' + 
-            t2Name + ': ' + (currentMatchScorers2.join(', ') || '—');
+            t1Name + ': ' + describe(currentMatchScorers1, currentMatchAutogoals1) + '<br>' + 
+            t2Name + ': ' + describe(currentMatchScorers2, currentMatchAutogoals2);
         reviewNode.style.display = 'block';
     }
 
     function resetScorers() {
         currentMatchScorers1 = []; currentMatchScorers2 = [];
+        currentMatchAutogoals1 = 0; currentMatchAutogoals2 = 0;
         if (document.getElementById('s1')) document.getElementById('s1').innerText = "0";
         if (document.getElementById('s2')) document.getElementById('s2').innerText = "0";
         if (document.getElementById('players-selector-1')) document.getElementById('players-selector-1').style.display = 'none';
@@ -896,7 +974,7 @@
         updateRatingDisplays();
     }
 
-    function saveMatchData() {
+    async function saveMatchData() {
         var teamA = document.getElementById('t1').value; 
         var teamB = document.getElementById('t2').value;
         var sA = parseInt(document.getElementById('s1').innerText); 
@@ -904,12 +982,24 @@
         if (!teamA || !teamB) { alert("Выберите обе команды!"); return; }
         if (teamA === teamB) { alert("Ошибка: Одна и та же команда!"); return; }
 
+        // Собираем авторов голов: обычные + автоголы
+        // ВАЖНО: автогол засчитывается команде-сопернику (по футбольным правилам),
+        // но в таблице бомбардиров фиксируется как «Автогол».
+        var scorers1List = [...currentMatchScorers1];
+        for (var a = 0; a < currentMatchAutogoals1; a++) scorers1List.push(AUTOGOAL);
+
+        var scorers2List = [...currentMatchScorers2];
+        for (var b = 0; b < currentMatchAutogoals2; b++) scorers2List.push(AUTOGOAL);
+
         games.push({ 
             id: Date.now(), t1: teamA, s1: sA, t2: teamB, s2: sB,
-            scorers1: [...currentMatchScorers1], scorers2: [...currentMatchScorers2],
+            scorers1: scorers1List, scorers2: scorers2List,
             t1Rating: teamRatings[teamA] || 0, t2Rating: teamRatings[teamB] || 0
         });
-        resetScorers(); syncToCloud(); refresh();
+        resetScorers(); 
+        await syncToCloud(); 
+        refresh();
+        alert("Данные сохранены!");
     }
 
     function dropRow(indexToDelete) {
@@ -1019,6 +1109,8 @@
             var players = teamPlayers[t] || [];
             players.forEach(function(p) { playerStats[p] = 0; });
         });
+        // Убедимся, что в статистике есть ключ «Автогол», даже если его нет в составах
+        if (playerStats[AUTOGOAL] === undefined) playerStats[AUTOGOAL] = 0;
 
         games = games.filter(function(g) { return g !== null && g !== undefined; });
 
@@ -1094,6 +1186,8 @@
 
         games = [];
         timeCurrent = timeMax;
+        currentMatchScorers1 = []; currentMatchScorers2 = [];
+        currentMatchAutogoals1 = 0; currentMatchAutogoals2 = 0;
 
         var freshTeamPlayers = {};
         teams.forEach(function(t) {
