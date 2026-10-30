@@ -227,13 +227,14 @@ if (window.location.pathname.includes('admin.html')) {
         document.getElementById('qrModal').style.display = 'none';
     };
 
+
     window.approveVisit = async (id) => {
         await updateDoc(doc(db, "visits", id), {
             status: "active",
-            checkInTime: new Date()
+            checkInTime: new Date(),
+            adminEmail: auth.currentUser ? auth.currentUser.email : "unknown"
         });
     };
-
     window.checkoutVisit = async (id) => {
         await updateDoc(doc(db, "visits", id), {
             status: "completed",
@@ -247,4 +248,182 @@ if (window.location.pathname.includes('admin.html')) {
             extraHours: currentExtra + 0.5
         });
     };
+}
+// --- СУПЕРПОЛЬЗОВАТЕЛЬ (superuser.html) ---
+if (window.location.pathname.includes('superuser.html')) {
+    let allCompleted = [];
+    let hoursChartInstance = null;
+
+    window.login = () => {
+        const email = document.getElementById('adminEmail').value;
+        const pass = document.getElementById('adminPass').value;
+        signInWithEmailAndPassword(auth, email, pass)
+            .catch((error) => alert("Ошибка входа: " + error.message));
+    };
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('superPanel').style.display = 'block';
+            loadSuperData();
+        }
+    });
+
+    function loadSuperData() {
+        onSnapshot(collection(db, "visits"), (snapshot) => {
+            allCompleted = [];
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (data.status === 'completed') {
+                    allCompleted.push({ id: docSnap.id, ...data });
+                }
+            });
+            renderAll();
+        });
+    }
+
+    function renderAll() {
+        renderTotalStats();
+        renderDailyTable();
+        renderHistory(allCompleted);
+        renderHoursChart();
+    }
+
+    function getTotalHours(data) {
+        return (data.baseHours || 0) + (data.extraHours || 0);
+    }
+
+    function renderTotalStats() {
+        let totalChildren = allCompleted.length;
+        let totalHours = 0;
+        let totalRevenue = 0;
+        allCompleted.forEach(d => {
+            totalHours += getTotalHours(d);
+            totalRevenue += getTotalHours(d) * PRICE_PER_HOUR;
+        });
+        document.getElementById('totalChildren').innerText = totalChildren;
+        document.getElementById('totalHours').innerText = totalHours.toFixed(1) + " ч.";
+        document.getElementById('totalRevenue').innerText = totalRevenue + " ₽";
+    }
+
+    function renderDailyTable() {
+        const daily = {};
+        allCompleted.forEach(d => {
+            let dateKey = "Неизвестно";
+            if (d.checkInTime) {
+                const dt = d.checkInTime.toDate();
+                dateKey = dt.toLocaleDateString('ru-RU');
+            }
+            if (!daily[dateKey]) {
+                daily[dateKey] = { count: 0, hours: 0, revenue: 0, admins: new Set() };
+            }
+            daily[dateKey].count++;
+            const h = getTotalHours(d);
+            daily[dateKey].hours += h;
+            daily[dateKey].revenue += h * PRICE_PER_HOUR;
+            if (d.adminEmail) daily[dateKey].admins.add(d.adminEmail);
+        });
+
+        const tbody = document.getElementById('dailyTable');
+        tbody.innerHTML = '';
+        // Сортируем даты по убыванию (новые сверху), "Неизвестно" в конец
+        const sortedKeys = Object.keys(daily).sort((a, b) => {
+            if (a === "Неизвестно") return 1;
+            if (b === "Неизвестно") return -1;
+            const [da, ma, ya] = a.split('.');
+            const [db, mb, yb] = b.split('.');
+            return new Date(ya, ma-1, da) - new Date(yb, mb-1, db);
+        });
+
+        sortedKeys.forEach(date => {
+            const row = daily[date];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${date}</td>
+                <td>${row.count}</td>
+                <td>${row.hours.toFixed(1)}</td>
+                <td>${row.revenue}</td>
+                <td>${row.admins.size ? Array.from(row.admins).join(', ') : '—'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderHistory(data) {
+        const tbody = document.getElementById('historyTable');
+        tbody.innerHTML = '';
+        // сортировка: сначала новые
+        data.sort((a, b) => {
+            const ta = a.checkInTime ? a.checkInTime.toDate().getTime() : 0;
+            const tb = b.checkInTime ? b.checkInTime.toDate().getTime() : 0;
+            return tb - ta;
+        });
+        data.forEach(d => {
+            const start = d.checkInTime ? d.checkInTime.toDate() : null;
+            const end = d.checkOutTime ? d.checkOutTime.toDate() : null;
+            const totalHours = getTotalHours(d);
+            const sum = totalHours * PRICE_PER_HOUR;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${start ? start.toLocaleDateString('ru-RU') : '—'}</td>
+                <td>${d.childName}</td>
+                <td>${start ? start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '—'}</td>
+                <td>${end ? end.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '—'}</td>
+                <td>${d.baseHours || 0} ч.</td>
+                <td>${d.extraHours || 0} ч.</td>
+                <td>${sum} ₽</td>
+                <td>${d.adminEmail || '—'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.filterHistory = () => {
+        const dateVal = document.getElementById('filterDate').value; // YYYY-MM-DD
+        if (!dateVal) {
+            renderHistory(allCompleted);
+            return;
+        }
+        const filtered = allCompleted.filter(d => {
+            if (!d.checkInTime) return false;
+            const dt = d.checkInTime.toDate();
+            const str = dt.toISOString().split('T')[0]; // YYYY-MM-DD
+            return str === dateVal;
+        });
+        renderHistory(filtered);
+    };
+
+    function renderHoursChart() {
+        // Собираем количество детей по часам (по времени входа)
+        const hoursCount = Array(24).fill(0);
+        allCompleted.forEach(d => {
+            if (d.checkInTime) {
+                const hour = d.checkInTime.toDate().getHours();
+                hoursCount[hour]++;
+            }
+        });
+
+        const ctx = document.getElementById('hoursChart').getContext('2d');
+        if (hoursChartInstance) hoursChartInstance.destroy();
+        hoursChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => i + ':00'),
+                datasets: [{
+                    label: 'Количество детей',
+                    data: hoursCount,
+                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
 }
