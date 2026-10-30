@@ -2,35 +2,58 @@
 <html>
 <head>
     <title>Админ-панель</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; padding: 20px; } 
-        .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; } 
-        .pending { background: #fff3cd; } 
-        .active { background: #d4edda; }
-        input, button { margin: 5px 0; padding: 8px; }
-        .qr-box { text-align: center; min-width: 120px; }
-        .qr-box img { width: 100px; height: 100px; border: 1px solid #ddd; }
-        .info-block { flex-grow: 1; }
-        #debug { color: red; font-size: 12px; margin-top: 20px; }
+        body { font-family: sans-serif; padding: 10px; margin: 0; background: #f9f9f9; }
+        h1 { font-size: 20px; text-align: center; }
+        h2 { font-size: 18px; margin-top: 20px; }
+        .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f1f1f1; font-weight: bold; }
+        tr:hover { background: #fafafa; }
+        .btn { padding: 6px 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; margin: 2px 0; display: block; width: 100%;}
+        .btn-qr { background: #3498db; color: white; }
+        .btn-checkout { background: #e74c3c; color: white; }
+        .btn-approve { background: #27ae60; color: white; }
+        .btn-extend { background: #f39c12; color: white; }
+        
+        /* Модальное окно */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; text-align: center; max-width: 90%; max-height: 90%; overflow: auto; }
+        .modal-content h3 { margin-top: 0; }
+        #qrModalCanvas { display: flex; justify-content: center; margin: 20px 0; }
+        #qrModalCanvas canvas, #qrModalCanvas img { width: 80vw !important; height: 80vw !important; max-width: 500px; max-height: 500px; }
+        .close-modal { background: #555; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 15px; }
     </style>
-    <!-- Используем другую библиотеку для QR -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <h1>Панель администратора</h1>
     
     <div id="loginSection">
-        <input type="email" id="adminEmail" placeholder="Email админа">
-        <input type="password" id="adminPass" placeholder="Пароль">
-        <button onclick="login()">Войти</button>
+        <input type="email" id="adminEmail" placeholder="Email админа" style="display:block; width:100%; padding:10px; margin-bottom:10px; box-sizing: border-box;">
+        <input type="password" id="adminPass" placeholder="Пароль" style="display:block; width:100%; padding:10px; margin-bottom:10px; box-sizing: border-box;">
+        <button class="btn btn-approve" onclick="login()" style="font-size:16px; padding:12px;">Войти</button>
     </div>
 
     <div id="adminPanel" style="display:none;">
-        <h2>Новые заявки (<span id="pendingCount">0</span>)</h2>
-        <div id="pendingList"></div>
-        <h2>Дети в комнате (<span id="activeCount">0</span>)</h2>
-        <div id="activeList"></div>
-        <div id="debug"></div>
+        <h2>Новые заявки</h2>
+        <div class="table-container" id="pendingContainer"></div>
+
+        <h2>Дети в комнате</h2>
+        <div class="table-container" id="activeContainer"></div>
+        
+        <div id="debug" style="color: #999; font-size: 12px; margin-top: 20px; text-align: center;"></div>
+    </div>
+
+    <!-- Модальное окно для QR -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalChildName"></h3>
+            <div id="qrModalCanvas"></div>
+            <button class="close-modal" onclick="closeModal()">Закрыть</button>
+        </div>
     </div>
 
     <script type="module" src="app.js"></script>
