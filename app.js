@@ -469,36 +469,66 @@ if (window.location.pathname.includes('superuser.html')) {
     };
 
     function renderHoursChart() {
-        // Почасовка по времени входа (за выбранный период)
-        const hoursCount = Array(24).fill(0);
-        filteredData.forEach(d => {
-            if (d.checkInTime) {
-                const hour = d.checkInTime.toDate().getHours();
-                hoursCount[hour]++;
-            }
-        });
+    // Считаем, сколько детей находилось в комнате в каждый час (0..23)
+    // Для каждой записи берем интервал [checkInTime, checkOutTime] и добавляем +1 в каждый час, с которым он пересекается.
+    const hoursCount = Array(24).fill(0);
 
-        const ctx = document.getElementById('hoursChart').getContext('2d');
-        if (hoursChartInstance) hoursChartInstance.destroy();
-        hoursChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: Array.from({length: 24}, (_, i) => i + ':00'),
-                datasets: [{
-                    label: 'Количество детей',
-                    data: hoursCount,
-                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                    borderColor: 'rgba(52, 152, 219, 1)',
-                    borderWidth: 1
-                }]
+    filteredData.forEach(d => {
+        if (!d.checkInTime || !d.checkOutTime) return;
+
+        const start = d.checkInTime.toDate();
+        const end = d.checkOutTime.toDate();
+        if (end <= start) return;
+
+        // Начало первого часа и конец последнего часа интервала (по границам часа)
+        // Например, если зашли в 10:30 и ушли в 12:15 — затрагиваются часы 10, 11, 12.
+        const startHour = start.getHours();
+        const endHour = end.getHours();
+
+        // Если интервал переходит через полночь — просто ограничимся 0..23
+        // (для детской комнаты это маловероятно, но учтем)
+        for (let h = startHour; h <= endHour; h++) {
+            // Проверяем, что час действительно пересекается с интервалом
+            // Час h — это отрезок [h:00, (h+1):00)
+            const hourStart = new Date(start);
+            hourStart.setHours(h, 0, 0, 0);
+            const hourEnd = new Date(start);
+            hourEnd.setHours(h + 1, 0, 0, 0);
+
+            // Пересечение: начало интервала < конец часа И конец интервала > начало часа
+            if (start < hourEnd && end > hourStart) {
+                hoursCount[h]++;
+            }
+        }
+    });
+
+    const ctx = document.getElementById('hoursChart').getContext('2d');
+    if (hoursChartInstance) hoursChartInstance.destroy();
+    hoursChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Array.from({length: 24}, (_, i) => i + ':00'),
+            datasets: [{
+                label: 'Детей в комнате (в среднем за час)',
+                data: hoursCount,
+                backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `Детей в комнате: ${ctx.parsed.y}`
+                    }
                 }
             }
-        });
-    }
+        }
+    });
 }
