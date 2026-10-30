@@ -5,12 +5,13 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https:/
 
 // ВАШ КОНФИГ (скопируйте из Firebase)
 const firebaseConfig = {
-  apiKey: "ВАШ_API_KEY",
-  authDomain: "ВАШ_ПРОЕКТ.firebaseapp.com",
-  projectId: "ВАШ_ПРОЕКТ",
-  storageBucket: "ВАШ_ПРОЕКТ.appspot.com",
-  messagingSenderId: "ВАШ_SENDER_ID",
-  appId: "ВАШ_APP_ID"
+  apiKey: "AIzaSyAMr6_gJxdtCEl_uYmsDN9LwXtq9rRoWRA",
+  authDomain: "kids-room-app.firebaseapp.com",
+  databaseURL: "https://kids-room-app-default-rtdb.firebaseio.com",
+  projectId: "kids-room-app",
+  storageBucket: "kids-room-app.firebasestorage.app",
+  messagingSenderId: "150998614419",
+  appId: "1:150998614419:web:3e1c21633155871f666866"
 };
 
 const app = initializeApp(firebaseConfig);
