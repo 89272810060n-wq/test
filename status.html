@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статус ребенка</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f9; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        h1 { color: #333; font-size: 24px; }
+        .timer { font-size: 48px; font-weight: bold; color: #2c3e50; margin: 20px 0; }
+        .info { font-size: 18px; color: #555; margin: 10px 0; }
+        .price { font-size: 24px; color: #e74c3c; font-weight: bold; margin: 20px 0; }
+        .btn { background: #3498db; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+        .btn:hover { background: #2980b9; }
+        .success-msg { color: #27ae60; font-size: 18px; margin-top: 20px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="mainCard">
+    <h1>Привет, <span id="childName">...</span>!</h1>
+    
+    <div class="info">Время приема: <b id="startTime">--:--</b></div>
+    <div class="info">Забрать в: <b id="endTime">--:--</b></div>
+    
+    <div class="timer" id="timer">--:--</div>
+    <div class="info">Осталось времени</div>
+    
+    <div class="price">К оплате: <span id="price">0</span> ₽</div>
+
+    <button class="btn" id="extendBtn" onclick="extendTime()">Продлить на 30 минут</button>
+    
+    <div class="success-msg" id="msg">Запрос на продление отправлен администратору!</div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
