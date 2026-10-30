@@ -7,33 +7,33 @@
     <style>
         body { font-family: sans-serif; background: #f4f4f9; margin: 0; padding: 20px; display: flex; justify-content: center; }
         .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        h1 { color: #333; font-size: 24px; }
-        .timer { font-size: 48px; font-weight: bold; color: #2c3e50; margin: 20px 0; }
-        .info { font-size: 18px; color: #555; margin: 10px 0; }
+        h1 { color: #333; font-size: 24px; margin-bottom: 10px; }
+        .timer { font-size: 48px; font-weight: bold; color: #2c3e50; margin: 20px 0; font-variant-numeric: tabular-nums; }
+        .info { font-size: 16px; color: #555; margin: 8px 0; display: flex; justify-content: space-between; border-bottom: 1px dashed #eee; padding-bottom: 5px; }
+        .info span:last-child { font-weight: bold; color: #333; }
         .price { font-size: 24px; color: #e74c3c; font-weight: bold; margin: 20px 0; }
-        .btn { background: #3498db; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+        .btn { background: #3498db; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
         .btn:hover { background: #2980b9; }
-        .success-msg { color: #27ae60; font-size: 18px; margin-top: 20px; display: none; }
+        .btn-green { background: #27ae60; }
+        .btn-green:hover { background: #219150; }
+        .success-msg { color: #27ae60; font-size: 16px; margin-top: 15px; display: none; }
     </style>
 </head>
 <body>
-
 <div class="card" id="mainCard">
     <h1>Привет, <span id="childName">...</span>!</h1>
-    
-    <div class="info">Время приема: <b id="startTime">--:--</b></div>
-    <div class="info">Забрать в: <b id="endTime">--:--</b></div>
-    
+    <div class="info"><span>Время приема:</span> <span id="startTime">--:--</span></div>
+    <div class="info"><span>Забрать в:</span> <span id="endTime">--:--</span></div>
     <div class="timer" id="timer">--:--</div>
-    <div class="info">Осталось времени</div>
-    
+    <div class="info"><span>Осталось:</span> <span id="timeLeftText">--</span></div>
+    <div class="info"><span>Тариф:</span> <span id="tariffText">--</span></div>
     <div class="price">К оплате: <span id="price">0</span> ₽</div>
 
-    <button class="btn" id="extendBtn" onclick="extendTime()">Продлить на 30 минут</button>
+    <button class="btn" onclick="extendTime()">+ 30 минут (Продление)</button>
+    <button class="btn btn-green" onclick="addFine()">+ Доплата (Опоздание / Сверхурочные)</button>
     
-    <div class="success-msg" id="msg">Запрос на продление отправлен администратору!</div>
+    <div class="success-msg" id="msg">Запрос отправлен администратору!</div>
 </div>
-
 <script type="module" src="app.js"></script>
 </body>
 </html>
