@@ -15,11 +15,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const PRICE_PER_HOUR = 300; // <-- Ваша цена за час
-// Исправленный BASE_URL
+const PRICE_PER_HOUR = 300;
 const BASE_URL = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
 
-let currentData = null; // для страницы родителя
+let currentData = null;
 
 // --- РОДИТЕЛЬ: форма заявки ---
 const form = document.getElementById('visitForm');
@@ -34,8 +33,8 @@ if (form) {
             await addDoc(collection(db, "visits"), {
                 childName: name,
                 parentPhone: phone,
-                baseHours: Number(tariffHours), // базовый тариф
-                extraHours: 0,                  // доплата (в часах)
+                baseHours: Number(tariffHours),
+                extraHours: 0,
                 status: "pending",
                 checkInTime: null,
                 checkOutTime: null,
@@ -99,14 +98,12 @@ if (timerElement) {
     }
 }
 
-// Продление на странице родителя (добавляем 0.5 часа к extraHours)
 window.extendTime = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const visitId = urlParams.get('id');
     if (visitId && currentData) {
-        const newExtra = (currentData.extraHours || 0) + 0.5;
         await updateDoc(doc(db, "visits", visitId), {
-            extraHours: newExtra
+            extraHours: (currentData.extraHours || 0) + 0.5
         });
         document.getElementById('msg').innerText = "Продление оформлено!";
         document.getElementById('msg').style.display = 'block';
@@ -114,14 +111,12 @@ window.extendTime = async () => {
     }
 };
 
-// Доплата (фиксированная сумма, например, за опоздание — оформляем как +0.5 часа доплаты)
 window.addFine = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const visitId = urlParams.get('id');
     if (visitId && currentData) {
-        const newExtra = (currentData.extraHours || 0) + 0.5;
         await updateDoc(doc(db, "visits", visitId), {
-            extraHours: newExtra
+            extraHours: (currentData.extraHours || 0) + 0.5
         });
         document.getElementById('msg').innerText = "Доплата добавлена!";
         document.getElementById('msg').style.display = 'block';
@@ -131,9 +126,14 @@ window.addFine = async () => {
 
 // --- АДМИН ---
 if (window.location.pathname.includes('admin.html')) {
+    // ВАЖНО: явно привязываем login к window, чтобы onclick в HTML его нашел
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
         const pass = document.getElementById('adminPass').value;
+        if (!email || !pass) {
+            alert("Введите email и пароль");
+            return;
+        }
         signInWithEmailAndPassword(auth, email, pass)
             .catch((error) => alert("Ошибка входа: " + error.message));
     };
@@ -143,6 +143,9 @@ if (window.location.pathname.includes('admin.html')) {
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('adminPanel').style.display = 'block';
             startListening();
+        } else {
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('adminPanel').style.display = 'none';
         }
     });
 
@@ -206,11 +209,10 @@ if (window.location.pathname.includes('admin.html')) {
         });
     }
 
-    // Показать QR в модальном окне
     window.showQR = (id, name) => {
         document.getElementById('modalChildName').innerText = name;
         const qrContainer = document.getElementById('qrModalCanvas');
-        qrContainer.innerHTML = ''; // очистить
+        qrContainer.innerHTML = '';
         const parentLink = `${BASE_URL}status.html?id=${id}`;
         new QRCode(qrContainer, {
             text: parentLink,
@@ -227,7 +229,6 @@ if (window.location.pathname.includes('admin.html')) {
         document.getElementById('qrModal').style.display = 'none';
     };
 
-
     window.approveVisit = async (id) => {
         await updateDoc(doc(db, "visits", id), {
             status: "active",
@@ -235,6 +236,7 @@ if (window.location.pathname.includes('admin.html')) {
             adminEmail: auth.currentUser ? auth.currentUser.email : "unknown"
         });
     };
+
     window.checkoutVisit = async (id) => {
         await updateDoc(doc(db, "visits", id), {
             status: "completed",
@@ -242,14 +244,14 @@ if (window.location.pathname.includes('admin.html')) {
         });
     };
 
-    // Продление из админки
     window.adminExtend = async (id, currentExtra) => {
         await updateDoc(doc(db, "visits", id), {
             extraHours: currentExtra + 0.5
         });
     };
 }
-// --- СУПЕРПОЛЬЗОВАТЕЛЬ (superuser.html) ---
+
+// --- СУПЕРПОЛЬЗОВАТЕЛЬ ---
 if (window.location.pathname.includes('superuser.html')) {
     let allCompleted = [];
     let filteredData = [];
@@ -259,6 +261,10 @@ if (window.location.pathname.includes('superuser.html')) {
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
         const pass = document.getElementById('adminPass').value;
+        if (!email || !pass) {
+            alert("Введите email и пароль");
+            return;
+        }
         signInWithEmailAndPassword(auth, email, pass)
             .catch((error) => alert("Ошибка входа: " + error.message));
     };
@@ -268,6 +274,9 @@ if (window.location.pathname.includes('superuser.html')) {
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('superPanel').style.display = 'block';
             loadSuperData();
+        } else {
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('superPanel').style.display = 'none';
         }
     });
 
@@ -284,9 +293,8 @@ if (window.location.pathname.includes('superuser.html')) {
         });
     }
 
-    // Применяет фильтр по датам из полей и перерисовывает всё
     window.applyDateFilter = (silent = false) => {
-        const fromVal = document.getElementById('filterFrom').value; // YYYY-MM-DD
+        const fromVal = document.getElementById('filterFrom').value;
         const toVal = document.getElementById('filterTo').value;
 
         currentFilter.from = fromVal ? new Date(fromVal + 'T00:00:00') : null;
@@ -410,24 +418,20 @@ if (window.location.pathname.includes('superuser.html')) {
         });
     }
 
-    // Удаление одной записи
     window.deleteOne = async (id) => {
         if (!confirm("Удалить эту запись навсегда?")) return;
         try {
             await deleteDoc(doc(db, "visits", id));
-            // обновление произойдет автоматически через onSnapshot
         } catch (e) {
             alert("Ошибка удаления: " + e.message);
         }
     };
 
-    // Удаление всех записей за конкретный день (из таблицы "Сводка по дням")
     window.deleteDay = async (dateStr) => {
         if (dateStr === "Неизвестно") {
             alert("Нельзя удалить записи без даты.");
             return;
         }
-        // Находим все записи за этот день среди ВСЕХ (не только отфильтрованных)
         const idsToDelete = allCompleted.filter(d => {
             if (!d.checkInTime) return false;
             return d.checkInTime.toDate().toLocaleDateString('ru-RU') === dateStr;
@@ -448,7 +452,6 @@ if (window.location.pathname.includes('superuser.html')) {
         }
     };
 
-    // Удаление всех записей за "выбранный день" через верхнюю панель (только если указан один день)
     window.deleteFilteredDay = async () => {
         const fromVal = document.getElementById('filterFrom').value;
         const toVal = document.getElementById('filterTo').value;
@@ -464,71 +467,51 @@ if (window.location.pathname.includes('superuser.html')) {
 
         const dayStr = fromVal || toVal;
         const [y, m, d] = dayStr.split('-');
-        const dateStr = `${d}.${m}.${y}`; // формат ru-RU
+        const dateStr = `${d}.${m}.${y}`;
         await deleteDay(dateStr);
     };
 
     function renderHoursChart() {
-    // Считаем, сколько детей находилось в комнате в каждый час (0..23)
-    // Для каждой записи берем интервал [checkInTime, checkOutTime] и добавляем +1 в каждый час, с которым он пересекается.
-    const hoursCount = Array(24).fill(0);
-
-    filteredData.forEach(d => {
-        if (!d.checkInTime || !d.checkOutTime) return;
-
-        const start = d.checkInTime.toDate();
-        const end = d.checkOutTime.toDate();
-        if (end <= start) return;
-
-        // Начало первого часа и конец последнего часа интервала (по границам часа)
-        // Например, если зашли в 10:30 и ушли в 12:15 — затрагиваются часы 10, 11, 12.
-        const startHour = start.getHours();
-        const endHour = end.getHours();
-
-        // Если интервал переходит через полночь — просто ограничимся 0..23
-        // (для детской комнаты это маловероятно, но учтем)
-        for (let h = startHour; h <= endHour; h++) {
-            // Проверяем, что час действительно пересекается с интервалом
-            // Час h — это отрезок [h:00, (h+1):00)
-            const hourStart = new Date(start);
-            hourStart.setHours(h, 0, 0, 0);
-            const hourEnd = new Date(start);
-            hourEnd.setHours(h + 1, 0, 0, 0);
-
-            // Пересечение: начало интервала < конец часа И конец интервала > начало часа
-            if (start < hourEnd && end > hourStart) {
-                hoursCount[h]++;
-            }
-        }
-    });
-
-    const ctx = document.getElementById('hoursChart').getContext('2d');
-    if (hoursChartInstance) hoursChartInstance.destroy();
-    hoursChartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: Array.from({length: 24}, (_, i) => i + ':00'),
-            datasets: [{
-                label: 'Детей в комнате (в среднем за час)',
-                data: hoursCount,
-                backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                borderColor: 'rgba(52, 152, 219, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => `Детей в комнате: ${ctx.parsed.y}`
-                    }
+        const hoursCount = Array(24).fill(0);
+        filteredData.forEach(d => {
+            if (!d.checkInTime || !d.checkOutTime) return;
+            const start = d.checkInTime.toDate();
+            const end = d.checkOutTime.toDate();
+            if (end <= start) return;
+            const startHour = start.getHours();
+            const endHour = end.getHours();
+            for (let h = startHour; h <= endHour; h++) {
+                const hourStart = new Date(start);
+                hourStart.setHours(h, 0, 0, 0);
+                const hourEnd = new Date(start);
+                hourEnd.setHours(h + 1, 0, 0, 0);
+                if (start < hourEnd && end > hourStart) {
+                    hoursCount[h]++;
                 }
             }
-        }
-    });
+        });
+
+        const ctx = document.getElementById('hoursChart').getContext('2d');
+        if (hoursChartInstance) hoursChartInstance.destroy();
+        hoursChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => i + ':00'),
+                datasets: [{
+                    label: 'Детей в комнате',
+                    data: hoursCount,
+                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
 }
