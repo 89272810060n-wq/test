@@ -15,7 +15,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const PRICE_PER_HOUR = 300;
+// --- ТАРИФЫ ---
+const PRICE_PER_HOUR = 300;        // Базовый тариф
+const EXTEND_PRICE_PER_HOUR = 400; // Тариф продления (дороже)
+
 const BASE_URL = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
 
 let currentData = null;
@@ -55,6 +58,7 @@ if (timerElement) {
     const urlParams = new URLSearchParams(window.location.search);
     const visitId = urlParams.get('id');
     let timerInterval = null;
+    let alarmTriggered = false;
 
     if (!visitId) {
         document.getElementById('mainCard').innerHTML = "<h2>Ошибка: Запись не найдена</h2>";
@@ -65,6 +69,18 @@ if (timerElement) {
             
             document.getElementById('childName').innerText = currentData.childName;
 
+            // Если ребенка забрали
+            if (currentData.status === 'completed' && currentData.checkOutTime) {
+                const end = currentData.checkOutTime.toDate();
+                document.getElementById('timer').innerText = end.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+                document.getElementById('timer').style.color = '#27ae60';
+                document.getElementById('timeLeftText').innerText = "Ребенка забрали";
+                document.getElementById('extendBtn').style.display = 'none'; // Скрываем кнопку продления
+                if (timerInterval) clearInterval(timerInterval);
+                return;
+            }
+
+            // Если ребенок еще в комнате
             if (currentData.checkInTime) {
                 const start = currentData.checkInTime.toDate();
                 const totalHours = (currentData.baseHours || 0) + (currentData.extraHours || 0);
@@ -72,8 +88,14 @@ if (timerElement) {
                 
                 document.getElementById('startTime').innerText = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
                 document.getElementById('endTime').innerText = end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                document.getElementById('price').innerText = totalHours * PRICE_PER_HOUR;
-                document.getElementById('tariffText').innerText = `Базовый: ${currentData.baseHours} ч. + Доплата: ${currentData.extraHours} ч.`;
+                
+                // Расчет стоимости с разными тарифами
+                const baseSum = (currentData.baseHours || 0) * PRICE_PER_HOUR;
+                const extraSum = (currentData.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
+                const totalSum = baseSum + extraSum;
+
+                document.getElementById('price').innerText = totalSum;
+                document.getElementById('tariffText').innerText = `Базовый: ${currentData.baseHours} ч. + Доплата: ${currentData.extraHours || 0} ч.`;
 
                 if (timerInterval) clearInterval(timerInterval);
                 timerInterval = setInterval(() => {
@@ -83,6 +105,18 @@ if (timerElement) {
                         timerElement.style.color = "red";
                         document.getElementById('timeLeftText').innerText = "Время вышло!";
                         clearInterval(timerInterval);
+                        
+                        // Вибрация и звук
+                        if (!alarmTriggered) {
+                            alarmTriggered = true;
+                            if (navigator.vibrate) {
+                                navigator.vibrate([500, 200, 500, 200, 500]);
+                            }
+                            const audio = document.getElementById('alarmSound');
+                            if (audio) {
+                                audio.play().catch(e => console.log("Звук заблокирован браузером:", e));
+                            }
+                        }
                     } else {
                         const h = Math.floor(diff / 3600000);
                         const m = Math.floor((diff % 3600000) / 60000);
@@ -98,6 +132,7 @@ if (timerElement) {
     }
 }
 
+// Продление на странице родителя (добавляем 0.5 часа)
 window.extendTime = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const visitId = urlParams.get('id');
@@ -111,22 +146,8 @@ window.extendTime = async () => {
     }
 };
 
-window.addFine = async () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const visitId = urlParams.get('id');
-    if (visitId && currentData) {
-        await updateDoc(doc(db, "visits", visitId), {
-            extraHours: (currentData.extraHours || 0) + 0.5
-        });
-        document.getElementById('msg').innerText = "Доплата добавлена!";
-        document.getElementById('msg').style.display = 'block';
-        setTimeout(() => document.getElementById('msg').style.display = 'none', 3000);
-    }
-};
-
 // --- АДМИН ---
 if (window.location.pathname.includes('admin.html')) {
-    // ВАЖНО: явно привязываем login к window, чтобы onclick в HTML его нашел
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
         const pass = document.getElementById('adminPass').value;
@@ -156,7 +177,7 @@ if (window.location.pathname.includes('admin.html')) {
 
         onSnapshot(collection(db, "visits"), (snapshot) => {
             let pendingHTML = `<table><tr><th>Имя</th><th>Телефон</th><th>Тариф</th><th>Действие</th></tr>`;
-            let activeHTML = `<table><tr><th>Имя</th><th>Прибыл</th><th>Уход</th><th>Тариф</th><th>К оплате</th><th>QR</th><th>Действие</th></tr>`;
+            let activeHTML = `<table><tr><th>Имя</th><th>Прибыл</th><th>Уход</th><th>Тариф</th><th>К оплате</th><th>Связь</th><th>QR</th><th>Действие</th></tr>`;
             
             let pendingCount = 0;
             let activeCount = 0;
@@ -180,7 +201,12 @@ if (window.location.pathname.includes('admin.html')) {
                     const end = new Date(start.getTime() + totalHours * 60 * 60 * 1000);
                     const startStr = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
                     const endStr = end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                    const totalPrice = totalHours * PRICE_PER_HOUR;
+                    
+                    // Расчет стоимости
+                    const baseSum = (data.baseHours || 0) * PRICE_PER_HOUR;
+                    const extraSum = (data.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
+                    const totalPrice = baseSum + extraSum;
+                    
                     const tariffStr = `${data.baseHours} ч. + ${data.extraHours || 0} ч.`;
 
                     activeHTML += `<tr>
@@ -189,6 +215,7 @@ if (window.location.pathname.includes('admin.html')) {
                         <td>${endStr}</td>
                         <td>${tariffStr}</td>
                         <td>${totalPrice} ₽</td>
+                        <td><a href="tel:${data.parentPhone}" class="btn btn-call">📞</a></td>
                         <td><button class="btn btn-qr" onclick="showQR('${id}', '${data.childName}')">QR</button></td>
                         <td>
                             <button class="btn btn-extend" onclick="adminExtend('${id}', ${data.extraHours || 0})">+30 мин</button>
@@ -338,7 +365,7 @@ if (window.location.pathname.includes('superuser.html')) {
         let totalRevenue = 0;
         filteredData.forEach(d => {
             totalHours += getTotalHours(d);
-            totalRevenue += getTotalHours(d) * PRICE_PER_HOUR;
+            totalRevenue += (d.baseHours || 0) * PRICE_PER_HOUR + (d.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
         });
         document.getElementById('totalChildren').innerText = totalChildren;
         document.getElementById('totalHours').innerText = totalHours.toFixed(1) + " ч.";
@@ -359,7 +386,7 @@ if (window.location.pathname.includes('superuser.html')) {
             daily[dateKey].count++;
             const h = getTotalHours(d);
             daily[dateKey].hours += h;
-            daily[dateKey].revenue += h * PRICE_PER_HOUR;
+            daily[dateKey].revenue += (d.baseHours || 0) * PRICE_PER_HOUR + (d.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
             if (d.adminEmail) daily[dateKey].admins.add(d.adminEmail);
             daily[dateKey].ids.push(d.id);
         });
@@ -401,7 +428,7 @@ if (window.location.pathname.includes('superuser.html')) {
             const start = d.checkInTime ? d.checkInTime.toDate() : null;
             const end = d.checkOutTime ? d.checkOutTime.toDate() : null;
             const totalHours = getTotalHours(d);
-            const sum = totalHours * PRICE_PER_HOUR;
+            const sum = (d.baseHours || 0) * PRICE_PER_HOUR + (d.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${start ? start.toLocaleDateString('ru-RU') : '—'}</td>
