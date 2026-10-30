@@ -14,8 +14,6 @@
         .price { font-size: 24px; color: #e74c3c; font-weight: bold; margin: 20px 0; }
         .btn { background: #3498db; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
         .btn:hover { background: #2980b9; }
-        .btn-green { background: #27ae60; }
-        .btn-green:hover { background: #219150; }
         .success-msg { color: #27ae60; font-size: 16px; margin-top: 15px; display: none; }
     </style>
 </head>
@@ -24,16 +22,23 @@
     <h1>Привет, <span id="childName">...</span>!</h1>
     <div class="info"><span>Время приема:</span> <span id="startTime">--:--</span></div>
     <div class="info"><span>Забрать в:</span> <span id="endTime">--:--</span></div>
+    
+    <!-- Таймер -->
     <div class="timer" id="timer">--:--</div>
     <div class="info"><span>Осталось:</span> <span id="timeLeftText">--</span></div>
+    
     <div class="info"><span>Тариф:</span> <span id="tariffText">--</span></div>
     <div class="price">К оплате: <span id="price">0</span> ₽</div>
 
-    <button class="btn" onclick="extendTime()">+ 30 минут (Продление)</button>
-    <button class="btn btn-green" onclick="addFine()">+ Доплата (Опоздание / Сверхурочные)</button>
+    <!-- Кнопки -->
+    <button class="btn" id="extendBtn" onclick="extendTime()">+ 30 минут (Продление)</button>
     
     <div class="success-msg" id="msg">Запрос отправлен администратору!</div>
 </div>
+
+<!-- Скрытый звук для будильника -->
+<audio id="alarmSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
