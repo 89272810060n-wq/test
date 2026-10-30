@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = {
@@ -252,7 +252,9 @@ if (window.location.pathname.includes('admin.html')) {
 // --- СУПЕРПОЛЬЗОВАТЕЛЬ (superuser.html) ---
 if (window.location.pathname.includes('superuser.html')) {
     let allCompleted = [];
+    let filteredData = [];
     let hoursChartInstance = null;
+    let currentFilter = { from: null, to: null };
 
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
@@ -278,14 +280,43 @@ if (window.location.pathname.includes('superuser.html')) {
                     allCompleted.push({ id: docSnap.id, ...data });
                 }
             });
-            renderAll();
+            applyDateFilter(true);
         });
     }
+
+    // Применяет фильтр по датам из полей и перерисовывает всё
+    window.applyDateFilter = (silent = false) => {
+        const fromVal = document.getElementById('filterFrom').value; // YYYY-MM-DD
+        const toVal = document.getElementById('filterTo').value;
+
+        currentFilter.from = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+        currentFilter.to = toVal ? new Date(toVal + 'T23:59:59') : null;
+
+        filteredData = allCompleted.filter(d => {
+            if (!d.checkInTime) return false;
+            const dt = d.checkInTime.toDate();
+            if (currentFilter.from && dt < currentFilter.from) return false;
+            if (currentFilter.to && dt > currentFilter.to) return false;
+            return true;
+        });
+
+        renderAll();
+        if (!silent) {
+            document.getElementById('filterFrom').blur();
+            document.getElementById('filterTo').blur();
+        }
+    };
+
+    window.resetDateFilter = () => {
+        document.getElementById('filterFrom').value = '';
+        document.getElementById('filterTo').value = '';
+        applyDateFilter(true);
+    };
 
     function renderAll() {
         renderTotalStats();
         renderDailyTable();
-        renderHistory(allCompleted);
+        renderHistory(filteredData);
         renderHoursChart();
     }
 
@@ -294,10 +325,10 @@ if (window.location.pathname.includes('superuser.html')) {
     }
 
     function renderTotalStats() {
-        let totalChildren = allCompleted.length;
+        let totalChildren = filteredData.length;
         let totalHours = 0;
         let totalRevenue = 0;
-        allCompleted.forEach(d => {
+        filteredData.forEach(d => {
             totalHours += getTotalHours(d);
             totalRevenue += getTotalHours(d) * PRICE_PER_HOUR;
         });
@@ -308,25 +339,25 @@ if (window.location.pathname.includes('superuser.html')) {
 
     function renderDailyTable() {
         const daily = {};
-        allCompleted.forEach(d => {
+        filteredData.forEach(d => {
             let dateKey = "Неизвестно";
             if (d.checkInTime) {
                 const dt = d.checkInTime.toDate();
                 dateKey = dt.toLocaleDateString('ru-RU');
             }
             if (!daily[dateKey]) {
-                daily[dateKey] = { count: 0, hours: 0, revenue: 0, admins: new Set() };
+                daily[dateKey] = { count: 0, hours: 0, revenue: 0, admins: new Set(), ids: [] };
             }
             daily[dateKey].count++;
             const h = getTotalHours(d);
             daily[dateKey].hours += h;
             daily[dateKey].revenue += h * PRICE_PER_HOUR;
             if (d.adminEmail) daily[dateKey].admins.add(d.adminEmail);
+            daily[dateKey].ids.push(d.id);
         });
 
         const tbody = document.getElementById('dailyTable');
         tbody.innerHTML = '';
-        // Сортируем даты по убыванию (новые сверху), "Неизвестно" в конец
         const sortedKeys = Object.keys(daily).sort((a, b) => {
             if (a === "Неизвестно") return 1;
             if (b === "Неизвестно") return -1;
@@ -344,6 +375,7 @@ if (window.location.pathname.includes('superuser.html')) {
                 <td>${row.hours.toFixed(1)}</td>
                 <td>${row.revenue}</td>
                 <td>${row.admins.size ? Array.from(row.admins).join(', ') : '—'}</td>
+                <td><button class="btn-delete" onclick="deleteDay('${date}')">🗑️</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -352,7 +384,6 @@ if (window.location.pathname.includes('superuser.html')) {
     function renderHistory(data) {
         const tbody = document.getElementById('historyTable');
         tbody.innerHTML = '';
-        // сортировка: сначала новые
         data.sort((a, b) => {
             const ta = a.checkInTime ? a.checkInTime.toDate().getTime() : 0;
             const tb = b.checkInTime ? b.checkInTime.toDate().getTime() : 0;
@@ -373,30 +404,74 @@ if (window.location.pathname.includes('superuser.html')) {
                 <td>${d.extraHours || 0} ч.</td>
                 <td>${sum} ₽</td>
                 <td>${d.adminEmail || '—'}</td>
+                <td><button class="btn-delete" onclick="deleteOne('${d.id}')">🗑️</button></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    window.filterHistory = () => {
-        const dateVal = document.getElementById('filterDate').value; // YYYY-MM-DD
-        if (!dateVal) {
-            renderHistory(allCompleted);
+    // Удаление одной записи
+    window.deleteOne = async (id) => {
+        if (!confirm("Удалить эту запись навсегда?")) return;
+        try {
+            await deleteDoc(doc(db, "visits", id));
+            // обновление произойдет автоматически через onSnapshot
+        } catch (e) {
+            alert("Ошибка удаления: " + e.message);
+        }
+    };
+
+    // Удаление всех записей за конкретный день (из таблицы "Сводка по дням")
+    window.deleteDay = async (dateStr) => {
+        if (dateStr === "Неизвестно") {
+            alert("Нельзя удалить записи без даты.");
             return;
         }
-        const filtered = allCompleted.filter(d => {
+        // Находим все записи за этот день среди ВСЕХ (не только отфильтрованных)
+        const idsToDelete = allCompleted.filter(d => {
             if (!d.checkInTime) return false;
-            const dt = d.checkInTime.toDate();
-            const str = dt.toISOString().split('T')[0]; // YYYY-MM-DD
-            return str === dateVal;
-        });
-        renderHistory(filtered);
+            return d.checkInTime.toDate().toLocaleDateString('ru-RU') === dateStr;
+        }).map(d => d.id);
+
+        if (idsToDelete.length === 0) {
+            alert("Нет записей за эту дату.");
+            return;
+        }
+        if (!confirm(`Удалить ${idsToDelete.length} записей за ${dateStr}? Это необратимо.`)) return;
+
+        try {
+            for (const id of idsToDelete) {
+                await deleteDoc(doc(db, "visits", id));
+            }
+        } catch (e) {
+            alert("Ошибка удаления: " + e.message);
+        }
+    };
+
+    // Удаление всех записей за "выбранный день" через верхнюю панель (только если указан один день)
+    window.deleteFilteredDay = async () => {
+        const fromVal = document.getElementById('filterFrom').value;
+        const toVal = document.getElementById('filterTo').value;
+
+        if (!fromVal && !toVal) {
+            alert("Укажите дату (поле «с» и/или «по»), чтобы удалить записи за день.");
+            return;
+        }
+        if (fromVal !== toVal && toVal !== '') {
+            alert("Для удаления за день укажите одну и ту же дату в полях «с» и «по».");
+            return;
+        }
+
+        const dayStr = fromVal || toVal;
+        const [y, m, d] = dayStr.split('-');
+        const dateStr = `${d}.${m}.${y}`; // формат ru-RU
+        await deleteDay(dateStr);
     };
 
     function renderHoursChart() {
-        // Собираем количество детей по часам (по времени входа)
+        // Почасовка по времени входа (за выбранный период)
         const hoursCount = Array(24).fill(0);
-        allCompleted.forEach(d => {
+        filteredData.forEach(d => {
             if (d.checkInTime) {
                 const hour = d.checkInTime.toDate().getHours();
                 hoursCount[hour]++;
