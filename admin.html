@@ -8,12 +8,13 @@
         .pending { background: #fff3cd; } 
         .active { background: #d4edda; }
         input, button { margin: 5px 0; padding: 8px; }
-        .qr-box { text-align: center; }
-        .qr-box img { width: 100px; height: 100px; }
+        .qr-box { text-align: center; min-width: 120px; }
+        .qr-box img { width: 100px; height: 100px; border: 1px solid #ddd; }
         .info-block { flex-grow: 1; }
+        #debug { color: red; font-size: 12px; margin-top: 20px; }
     </style>
-    <!-- Подключаем библиотеку для QR-кодов -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Используем другую библиотеку для QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <h1>Панель администратора</h1>
@@ -25,10 +26,11 @@
     </div>
 
     <div id="adminPanel" style="display:none;">
-        <h2>Новые заявки</h2>
+        <h2>Новые заявки (<span id="pendingCount">0</span>)</h2>
         <div id="pendingList"></div>
-        <h2>Дети в комнате</h2>
+        <h2>Дети в комнате (<span id="activeCount">0</span>)</h2>
         <div id="activeList"></div>
+        <div id="debug"></div>
     </div>
 
     <script type="module" src="app.js"></script>
