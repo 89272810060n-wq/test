@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Админ-панель</title>
+    <style>body { font-family: sans-serif; padding: 20px; } .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; } .pending { background: #fff3cd; } .active { background: #d4edda; }</style>
+</head>
+<body>
+    <h1>Панель администратора</h1>
+    <div id="loginSection">
+        <input type="email" id="adminEmail" placeholder="Email админа">
+        <input type="password" id="adminPass" placeholder="Пароль">
+        <button onclick="login()">Войти</button>
+    </div>
+    <div id="adminPanel" style="display:none;">
+        <h2>Новые заявки</h2>
+        <div id="pendingList"></div>
+        <h2>Дети в комнате</h2>
+        <div id="activeList"></div>
+    </div>
+</body>
+</html>
