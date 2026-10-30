@@ -17,7 +17,8 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const PRICE_PER_HOUR = 300; // <-- Ваша цена за час
-const BASE_URL = "https://89272810060n-wq.github.io/test/";
+// Берем текущий URL и отрезаем всё после последнего слэша, чтобы получить путь к папке
+const BASE_URL = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
 // --- РОДИТЕЛЬ: форма заявки (index.html) ---
 const form = document.getElementById('visitForm');
 if (form) {
