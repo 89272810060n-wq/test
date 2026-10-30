@@ -4,11 +4,16 @@
     <title>Админ-панель</title>
     <style>
         body { font-family: sans-serif; padding: 20px; } 
-        .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; } 
+        .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; } 
         .pending { background: #fff3cd; } 
         .active { background: #d4edda; }
-        input, button { margin: 5px 0; padding: 8px; display: block; width: 100%; max-width: 300px; }
+        input, button { margin: 5px 0; padding: 8px; }
+        .qr-box { text-align: center; }
+        .qr-box img { width: 100px; height: 100px; }
+        .info-block { flex-grow: 1; }
     </style>
+    <!-- Подключаем библиотеку для QR-кодов -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
     <h1>Панель администратора</h1>
@@ -26,7 +31,6 @@
         <div id="activeList"></div>
     </div>
 
-    <!-- ЭТА СТРОКА БЫЛА ПРОПУЩЕНА! Она подключает вашу логику -->
     <script type="module" src="app.js"></script>
 </body>
 </html>
