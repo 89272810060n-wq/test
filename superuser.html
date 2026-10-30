@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель владельца</title>
+    <style>
+        body { font-family: sans-serif; padding: 10px; margin: 0; background: #f4f4f9; }
+        h1 { font-size: 22px; text-align: center; }
+        h2 { font-size: 18px; margin-top: 25px; border-left: 4px solid #3498db; padding-left: 8px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f1f1f1; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+        .stat-box { background: #fff; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .stat-box .value { font-size: 24px; font-weight: bold; color: #2c3e50; }
+        .stat-box .label { font-size: 12px; color: #777; }
+        input[type="date"] { padding: 8px; margin-right: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        canvas { max-height: 300px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>📊 Панель владельца</h1>
+
+    <div id="loginSection" class="card" style="max-width: 400px; margin: 0 auto;">
+        <input type="email" id="adminEmail" placeholder="Email владельца" style="display:block; width:100%; padding:10px; margin-bottom:10px; box-sizing: border-box;">
+        <input type="password" id="adminPass" placeholder="Пароль" style="display:block; width:100%; padding:10px; margin-bottom:10px; box-sizing: border-box;">
+        <button onclick="login()" style="width:100%; padding:12px; background:#3498db; color:white; border:none; border-radius:5px; font-size:16px;">Войти</button>
+    </div>
+
+    <div id="superPanel" style="display:none;">
+        
+        <!-- Сводные показатели -->
+        <h2>Сводка за всё время</h2>
+        <div class="stats-grid" id="totalStats">
+            <div class="stat-box"><div class="value" id="totalChildren">0</div><div class="label">Всего детей</div></div>
+            <div class="stat-box"><div class="value" id="totalRevenue">0 ₽</div><div class="label">Выручка</div></div>
+            <div class="stat-box"><div class="value" id="totalHours">0 ч.</div><div class="label">Часов</div></div>
+        </div>
+
+        <!-- График по часам -->
+        <h2>Количество детей по часам (все время)</h2>
+        <div class="card">
+            <canvas id="hoursChart"></canvas>
+        </div>
+
+        <!-- Аналитика по датам -->
+        <h2>Сводка по дням</h2>
+        <div class="card table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Детей</th>
+                        <th>Общее время (ч.)</th>
+                        <th>Выручка (₽)</th>
+                        <th>Администраторы</th>
+                    </tr>
+                </thead>
+                <tbody id="dailyTable"></tbody>
+            </table>
+        </div>
+
+        <!-- История посещений -->
+        <h2>История посещений</h2>
+        <div class="card">
+            <input type="date" id="filterDate" onchange="filterHistory()">
+            <button onclick="document.getElementById('filterDate').value=''; filterHistory()" style="padding:8px 12px; border:none; background:#ddd; border-radius:5px; cursor:pointer;">Сброс</button>
+        </div>
+        <div class="card table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Ребенок</th>
+                        <th>Прибыл</th>
+                        <th>Ушел</th>
+                        <th>Базовый</th>
+                        <th>Доплата</th>
+                        <th>Сумма</th>
+                        <th>Админ</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
