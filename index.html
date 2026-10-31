@@ -3,18 +3,38 @@
 <head>
     <title>Детская комната - Регистрация</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>body { font-family: sans-serif; padding: 20px; } input, select, button { display: block; margin: 10px 0; padding: 10px; width: 100%; max-width: 300px; }</style>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        input, select, button { display: block; margin: 10px 0; padding: 10px; width: 100%; max-width: 400px; box-sizing: border-box; }
+        label { font-weight: bold; display: block; margin-top: 10px; }
+    </style>
 </head>
 <body>
     <h1>Запись в детскую комнату</h1>
     <form id="visitForm">
+        <label>Имя ребенка</label>
         <input type="text" id="childName" placeholder="Имя ребенка" required>
+
+        <label>Телефон родителя</label>
         <input type="text" id="parentPhone" placeholder="Телефон родителя" required>
+
+        <label>Предоплата (тариф)</label>
         <select id="tariff">
-            <option value="1">1 час (Базовый)</option>
-            <option value="2">2 часа (Базовый)</option>
-            <option value="0.5">30 минут</option>
+            <option value="0.5">30 минут — 300 ₽</option>
+            <option value="1">1 час — 400 ₽</option>
+            <option value="24">Безлимит на сутки — 600 ₽</option>
         </select>
+
+        <label>Категория скидки</label>
+        <select id="category">
+            <option value="standard">Стандарт</option>
+            <option value="yarmarka">Сотрудник ТЦ «Ярмарка» (−50%)</option>
+            <option value="fitness">Посетитель фитнес-клуба (−10%)</option>
+            <option value="svo">СВО (−50 ₽ от тарифа)</option>
+            <option value="ovz">ОВЗ (−50 ₽ от тарифа)</option>
+            <option value="many">Многодетные (−50 ₽ от тарифа)</option>
+        </select>
+
         <button type="submit">Отправить заявку администратору</button>
     </form>
     <p id="status"></p>
