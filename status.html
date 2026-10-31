@@ -19,24 +19,21 @@
 </head>
 <body>
 <div class="card" id="mainCard">
-    <h1>Гость <span id="childName">...</span>!</h1>
+    <h1>Гость <span id="childName">...</span></h1>
     <div class="info"><span>Время приема:</span> <span id="startTime">--:--</span></div>
     <div class="info"><span>Забрать в:</span> <span id="endTime">--:--</span></div>
     
-    <!-- Таймер -->
     <div class="timer" id="timer">--:--</div>
     <div class="info"><span>Осталось:</span> <span id="timeLeftText">--</span></div>
     
     <div class="info"><span>Тариф:</span> <span id="tariffText">--</span></div>
     <div class="price">К оплате: <span id="price">0</span> ₽</div>
 
-    <!-- Кнопки -->
     <button class="btn" id="extendBtn" onclick="extendTime()">+ 30 минут (Продление)</button>
     
     <div class="success-msg" id="msg">Запрос отправлен администратору!</div>
 </div>
 
-<!-- Скрытый звук для будильника -->
 <audio id="alarmSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
 
 <script type="module" src="app.js"></script>
