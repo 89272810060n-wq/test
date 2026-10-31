@@ -535,4 +535,70 @@ if (window.location.pathname.includes('superuser.html')) {
     };
 
     window.deleteFilteredDay = async () => {
-        const fromVal = document.getElementById('filterFrom').value
+        const fromVal = document.getElementById('filterFrom').value;
+              const fromVal = document.getElementById('filterFrom').value;
+        const toVal = document.getElementById('filterTo').value;
+
+        if (!fromVal && !toVal) {
+            alert("Укажите дату (поле «с» и/или «по»), чтобы удалить записи за день.");
+            return;
+        }
+        if (fromVal !== toVal && toVal !== '') {
+            alert("Для удаления за день укажите одну и ту же дату в полях «с» и «по».");
+            return;
+        }
+
+        const dayStr = fromVal || toVal;
+        const [y, m, d] = dayStr.split('-');
+        const dateStr = `${d}.${m}.${y}`;
+        await deleteDay(dateStr);
+    };
+
+    function renderHoursChart() {
+        // Считаем, сколько детей находилось в комнате в каждый час (0..23)
+        const hoursCount = Array(24).fill(0);
+        filteredData.forEach(d => {
+            if (!d.checkInTime || !d.checkOutTime) return;
+            const start = d.checkInTime.toDate();
+            const end = d.checkOutTime.toDate();
+            if (end <= start) return;
+            
+            const startHour = start.getHours();
+            const endHour = end.getHours();
+            
+            for (let h = startHour; h <= endHour; h++) {
+                const hourStart = new Date(start);
+                hourStart.setHours(h, 0, 0, 0);
+                const hourEnd = new Date(start);
+                hourEnd.setHours(h + 1, 0, 0, 0);
+                
+                if (start < hourEnd && end > hourStart) {
+                    hoursCount[h]++;
+                }
+            }
+        });
+
+        const ctx = document.getElementById('hoursChart').getContext('2d');
+        if (hoursChartInstance) hoursChartInstance.destroy();
+        hoursChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => i + ':00'),
+                datasets: [{
+                    label: 'Детей в комнате',
+                    data: hoursCount,
+                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+}
