@@ -22,17 +22,14 @@ let currentData = null;
 const PRICE_30 = 300;
 const PRICE_1H = 400;
 const PRICE_UNLIM = 600;
-const MIN_PAID_TIME = 15; // минут: если меньше — полный возврат
 
-// Функция расчета фактической стоимости по времени нахождения (в минутах)
 function calcActualPrice(minutes) {
-    if (minutes < MIN_PAID_TIME) return 0;
-    if (minutes <= 30) return PRICE_30;
-    if (minutes <= 60) return PRICE_1H;
+    if (minutes < 15) return 0;
+    if (minutes < 45) return PRICE_30;
+    if (minutes < 75) return PRICE_1H;
     return PRICE_UNLIM;
 }
 
-// Функция применения скидки к базовой сумме
 function applyDiscount(baseSum, category) {
     if (category === 'yarmarka') return Math.round(baseSum * 0.5);
     if (category === 'fitness') return Math.round(baseSum * 0.9);
@@ -42,7 +39,6 @@ function applyDiscount(baseSum, category) {
     return baseSum;
 }
 
-// Определяем цену предоплаты по выбранному тарифу
 function getPrepaidAmount(tariffHours) {
     if (tariffHours === 0.5) return PRICE_30;
     if (tariffHours === 1) return PRICE_1H;
@@ -50,7 +46,6 @@ function getPrepaidAmount(tariffHours) {
     return PRICE_30;
 }
 
-// Название категории для отображения
 function categoryLabel(cat) {
     const map = {
         'standard': 'Стандарт',
@@ -61,6 +56,12 @@ function categoryLabel(cat) {
         'many': 'Многодетные'
     };
     return map[cat] || 'Стандарт';
+}
+
+function getCurrentMinutes(checkInTime) {
+    if (!checkInTime) return 0;
+    const start = checkInTime.toDate ? checkInTime.toDate() : new Date(checkInTime);
+    return Math.floor((new Date() - start) / 60000);
 }
 
 // --- РОДИТЕЛЬ: форма заявки ---
@@ -114,7 +115,6 @@ if (timerElement) {
             
             document.getElementById('childName').innerText = currentData.childName;
 
-            // Если ребенка забрали
             if (currentData.status === 'completed' && currentData.checkOutTime) {
                 const end = currentData.checkOutTime.toDate();
                 document.getElementById('timer').innerText = end.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
@@ -135,7 +135,6 @@ if (timerElement) {
                 return;
             }
 
-            // Если ребенок еще в комнате
             if (currentData.checkInTime) {
                 const start = currentData.checkInTime.toDate();
                 const limitHours = currentData.tariffHours >= 24 ? 24 : currentData.tariffHours;
@@ -199,6 +198,11 @@ window.extendTime = async () => {
 
 // --- АДМИН ---
 if (window.location.pathname.includes('admin.html')) {
+    let activeSort = { column: 'start', asc: true };
+    let rawActiveData = [];
+    let intervalId = null;
+    let pendingCheckoutId = null;
+
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
         const pass = document.getElementById('adminPass').value;
@@ -221,6 +225,7 @@ if (window.location.pathname.includes('admin.html')) {
             document.getElementById('loginSection').style.display = 'block';
             document.getElementById('adminPanel').style.display = 'none';
             document.getElementById('logoutBtn').style.display = 'none';
+            if (intervalId) clearInterval(intervalId);
         }
     });
 
@@ -230,9 +235,8 @@ if (window.location.pathname.includes('admin.html')) {
         const debug = document.getElementById('debug');
 
         onSnapshot(collection(db, "visits"), (snapshot) => {
-            let pendingHTML = `<table><tr><th>Имя</th><th>Телефон</th><th>Тариф</th><th>Категория</th><th>Предоплата</th><th>Действие</th></tr>`;
-            let activeHTML = `<table><tr><th>Имя</th><th>Прибыл</th><th>Уход</th><th>Тариф</th><th>Категория</th><th>К оплате</th><th>Связь</th><th>QR</th><th>Действие</th></tr>`;
-            
+            let pendingHTML = `<table><tr><th class="no-sort">Имя</th><th class="no-sort">Телефон</th><th class="no-sort">Тариф</th><th class="no-sort">Категория</th><th class="no-sort">Предоплата</th><th class="no-sort">Действие</th></tr>`;
+            rawActiveData = [];
             let pendingCount = 0;
             let activeCount = 0;
 
@@ -247,44 +251,172 @@ if (window.location.pathname.includes('admin.html')) {
                         <td>${data.parentPhone}</td>
                         <td>${data.tariffHours >= 24 ? 'Безлимит' : data.tariffHours + ' ч.'}</td>
                         <td>${categoryLabel(data.category)}</td>
-                        <td>${data.prepaid} ₽</td>
+                        <td class="col-money">${data.prepaid} ₽</td>
                         <td><button class="btn btn-approve" onclick="approveVisit('${id}')">Посадить</button></td>
                     </tr>`;
                 } else if (data.status === 'active') {
                     activeCount++;
-                    const start = data.checkInTime ? data.checkInTime.toDate() : new Date();
-                    const limitHours = data.tariffHours >= 24 ? 24 : data.tariffHours;
-                    const end = new Date(start.getTime() + limitHours * 60 * 60 * 1000);
-                    const startStr = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                    const endStr = limitHours >= 24 ? 'Безлимит' : end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-
-                    activeHTML += `<tr>
-                        <td>${data.childName}</td>
-                        <td>${startStr}</td>
-                        <td>${endStr}</td>
-                        <td>${data.tariffHours >= 24 ? 'Безлимит' : data.tariffHours + ' ч.'}</td>
-                        <td>${categoryLabel(data.category)}</td>
-                        <td>${data.prepaid} ₽</td>
-                        <td><a href="tel:${data.parentPhone}" class="btn btn-call">📞</a></td>
-                        <td><button class="btn btn-qr" onclick="showQR('${id}', '${data.childName}')">QR</button></td>
-                        <td>
-                            <button class="btn btn-extend" onclick="adminExtend('${id}', ${data.tariffHours}, '${data.category}')">Продлить</button>
-                            <button class="btn btn-checkout" onclick="checkoutVisit('${id}')">Забрали</button>
-                        </td>
-                    </tr>`;
+                    rawActiveData.push({ id, ...data });
                 }
             });
 
             pendingHTML += `</table>`;
-            activeHTML += `</table>`;
-
             pendingContainer.innerHTML = pendingHTML;
-            activeContainer.innerHTML = activeHTML;
+            
+            renderActiveTable(activeContainer);
             debug.innerText = `Всего: Pending: ${pendingCount}, Active: ${activeCount}`;
         }, (error) => {
             console.error("Ошибка onSnapshot:", error);
         });
+
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(() => {
+            if (rawActiveData.length > 0) {
+                renderActiveTable(document.getElementById('activeContainer'));
+            }
+        }, 60000);
     }
+
+    function renderActiveTable(container) {
+        rawActiveData.sort((a, b) => {
+            let valA, valB;
+            if (activeSort.column === 'start') {
+                valA = a.checkInTime ? a.checkInTime.toDate().getTime() : 0;
+                valB = b.checkInTime ? b.checkInTime.toDate().getTime() : 0;
+            } else if (activeSort.column === 'name') {
+                valA = a.childName.toLowerCase();
+                valB = b.childName.toLowerCase();
+            } else if (activeSort.column === 'tariff') {
+                valA = a.tariffHours;
+                valB = b.tariffHours;
+            } else {
+                valA = 0; valB = 0;
+            }
+            if (valA < valB) return activeSort.asc ? -1 : 1;
+            if (valA > valB) return activeSort.asc ? 1 : -1;
+            return 0;
+        });
+
+        let activeHTML = `<table>
+            <tr>
+                <th onclick="sortActive('name')">Имя ${activeSort.column==='name' ? (activeSort.asc?'▲':'▼') : ''}</th>
+                <th onclick="sortActive('start')">Прибыл ${activeSort.column==='start' ? (activeSort.asc?'▲':'▼') : ''}</th>
+                <th class="no-sort">Уход</th>
+                <th onclick="sortActive('tariff')">Тариф ${activeSort.column==='tariff' ? (activeSort.asc?'▲':'▼') : ''}</th>
+                <th class="no-sort">Категория</th>
+                <th class="no-sort">Предоплата</th>
+                <th class="no-sort">Факт (сейчас)</th>
+                <th class="no-sort">Возврат / Доплата</th>
+                <th class="no-sort">Связь</th>
+                <th class="no-sort">QR</th>
+                <th class="no-sort">Действие</th>
+            </tr>`;
+
+        rawActiveData.forEach(data => {
+            const id = data.id;
+            const start = data.checkInTime ? data.checkInTime.toDate() : new Date();
+            const limitHours = data.tariffHours >= 24 ? 24 : data.tariffHours;
+            const end = new Date(start.getTime() + limitHours * 60 * 60 * 1000);
+            const startStr = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
+            const endStr = limitHours >= 24 ? 'Безлимит' : end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
+
+            const currentMinutes = getCurrentMinutes(data.checkInTime);
+            const baseActualNow = calcActualPrice(currentMinutes);
+            const actualNow = applyDiscount(baseActualNow, data.category);
+            const prepaid = data.prepaid || 0;
+            const diff = prepaid - actualNow;
+            
+            let diffStr = '';
+            if (diff > 0) diffStr = `<span style="color:green; font-weight:bold;">+${diff} ₽</span>`;
+            else if (diff < 0) diffStr = `<span style="color:red; font-weight:bold;">${diff} ₽</span>`;
+            else diffStr = `0 ₽`;
+
+            activeHTML += `<tr>
+                <td>${data.childName}</td>
+                <td>${startStr}</td>
+                <td>${endStr}</td>
+                <td>${data.tariffHours >= 24 ? 'Безлимит' : data.tariffHours + ' ч.'}</td>
+                <td>${categoryLabel(data.category)}</td>
+                <td class="col-money">${prepaid} ₽</td>
+                <td class="col-money">${actualNow} ₽ <br><small style="color:#777">(${currentMinutes} мин)</small></td>
+                <td class="col-money">${diffStr}</td>
+                <td><a href="tel:${data.parentPhone}" class="btn btn-call">📞</a></td>
+                <td><button class="btn btn-qr" onclick="showQR('${id}', '${data.childName}')">QR</button></td>
+                <td>
+                    <button class="btn btn-checkout" onclick="openCalcModal('${id}')">Забрали</button>
+                </td>
+            </tr>`;
+        });
+
+        activeHTML += `</table>`;
+        container.innerHTML = activeHTML;
+    }
+
+    window.sortActive = (column) => {
+        if (activeSort.column === column) {
+            activeSort.asc = !activeSort.asc;
+        } else {
+            activeSort.column = column;
+            activeSort.asc = true;
+        }
+        renderActiveTable(document.getElementById('activeContainer'));
+    };
+
+    window.openCalcModal = (id) => {
+        const data = rawActiveData.find(d => d.id === id);
+        if (!data) return;
+        pendingCheckoutId = id;
+
+        const start = data.checkInTime.toDate();
+        const end = new Date();
+        const minutes = Math.floor((end - start) / 60000);
+        const baseActual = calcActualPrice(minutes);
+        const actualPrice = applyDiscount(baseActual, data.category);
+        const prepaid = data.prepaid || 0;
+        const diff = prepaid - actualPrice;
+
+        let tariffName = 'Безлимит (600 ₽)';
+        if (minutes < 15) tariffName = 'Бесплатно (<15 мин)';
+        else if (minutes < 45) tariffName = '30 минут (300 ₽)';
+        else if (minutes < 75) tariffName = '1 час (400 ₽)';
+
+        let diffStr = '';
+        if (diff > 0) diffStr = `<span style="color:green;">Вернуть ${diff} ₽</span>`;
+        else if (diff < 0) diffStr = `<span style="color:red;">Доплатить ${-diff} ₽</span>`;
+        else diffStr = `0 ₽`;
+
+        document.getElementById('calcDetails').innerHTML = `
+            <p><span>Имя ребенка:</span> <span>${data.childName}</span></p>
+            <p><span>Время в комнате:</span> <span>${minutes} мин.</span></p>
+            <p><span>Тариф по факту:</span> <span>${tariffName}</span></p>
+            <p><span>Предоплата:</span> <span>${prepaid} ₽</span></p>
+            <p class="total-line"><span>Итоговый расчет:</span> <span>${diffStr}</span></p>
+        `;
+        document.getElementById('calcModal').style.display = 'flex';
+    };
+
+    window.confirmCheckout = async () => {
+        if (!pendingCheckoutId) return;
+        const id = pendingCheckoutId;
+        const data = rawActiveData.find(d => d.id === id);
+        if (!data) return;
+
+        const start = data.checkInTime.toDate();
+        const end = new Date();
+        const minutes = Math.floor((end - start) / 60000);
+        const baseActual = calcActualPrice(minutes);
+        const actualPrice = applyDiscount(baseActual, data.category);
+
+        await updateDoc(doc(db, "visits", id), {
+            status: "completed",
+            checkOutTime: end,
+            actualMinutes: minutes,
+            actualPrice: actualPrice
+        });
+
+        document.getElementById('calcModal').style.display = 'none';
+        pendingCheckoutId = null;
+    };
 
     window.showQR = (id, name) => {
         document.getElementById('modalChildName').innerText = name;
@@ -306,45 +438,7 @@ if (window.location.pathname.includes('admin.html')) {
             adminEmail: auth.currentUser ? auth.currentUser.email : "unknown"
         });
     };
-
-    window.checkoutVisit = async (id) => {
-        const docRef = doc(db, "visits", id);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) { alert("Запись не найдена"); return; }
-        const data = snap.data();
-        if (!data.checkInTime) { alert("Ошибка: нет времени заезда"); return; }
-
-        const start = data.checkInTime.toDate();
-        const end = new Date();
-        const minutes = Math.floor((end - start) / 60000);
-
-        const baseActual = calcActualPrice(minutes);
-        const actualPrice = applyDiscount(baseActual, data.category);
-
-        await updateDoc(docRef, {
-            status: "completed",
-            checkOutTime: end,
-            actualMinutes: minutes,
-            actualPrice: actualPrice
-        });
-    };
-
-    window.adminExtend = async (id, currentTariff, category) => {
-        let newTariff = currentTariff;
-        if (currentTariff === 0.5) newTariff = 1;
-        else if (currentTariff === 1) newTariff = 24;
-        else newTariff = 24;
-
-        const base = getPrepaidAmount(newTariff);
-        const newPrepaid = applyDiscount(base, category);
-
-        await updateDoc(doc(db, "visits", id), {
-            tariffHours: newTariff,
-            prepaid: newPrepaid
-        });
-    };
 }
-
 // --- СУПЕРПОЛЬЗОВАТЕЛЬ ---
 if (window.location.pathname.includes('superuser.html')) {
     let allCompleted = [];
