@@ -25,11 +25,16 @@
         .filter-bar label { font-size: 14px; }
         .btn-apply { background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
         .btn-reset { background: #ddd; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .btn-logout { background: #e74c3c; color: white; border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; font-size: 14px; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <h1>📊 Панель владельца</h1>
+    <div class="topbar">
+        <h1>📊 Панель владельца</h1>
+        <button class="btn-logout" id="logoutBtn" style="display:none;" onclick="logout()">Выйти</button>
+    </div>
 
     <div id="loginSection" class="card" style="max-width: 400px; margin: 0 auto;">
         <input type="email" id="adminEmail" placeholder="Email владельца" style="display:block; width:100%; padding:10px; margin-bottom:10px; box-sizing: border-box;">
@@ -92,9 +97,11 @@
                         <th>Ребенок</th>
                         <th>Прибыл</th>
                         <th>Ушел</th>
-                        <th>Базовый</th>
-                        <th>Доплата</th>
-                        <th>Сумма</th>
+                        <th>Время</th>
+                        <th>Категория</th>
+                        <th>Предоплата</th>
+                        <th>Факт</th>
+                        <th>Возврат / Доплата</th>
                         <th>Админ</th>
                         <th>Удалить</th>
                     </tr>
