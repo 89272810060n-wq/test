@@ -318,18 +318,31 @@ if (window.location.pathname.includes('admin.html')) {
         });
     };
 
-    window.checkoutVisit = async (id) => {
-        // Находим запись и считаем фактическую стоимость
+        window.checkoutVisit = async (id) => {
+        // Находим запись, чтобы узнать время заезда
         const docRef = doc(db, "visits", id);
-        const snap = await getDocFromCacheOrServer(docRef);
-        if (!snap.exists()) return;
+        
+        // Используем onSnapshot-подход: получаем данные из уже имеющегося стейта
+        // (в startListening у нас есть все данные, но проще сделать отдельный запрос)
+        const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+        const snap = await getDoc(docRef);
+        
+        if (!snap.exists()) {
+            alert("Запись не найдена");
+            return;
+        }
+        
         const data = snap.data();
-        if (!data.checkInTime) { alert("Ошибка: нет времени заезда"); return; }
+        if (!data.checkInTime) {
+            alert("Ошибка: нет времени заезда");
+            return;
+        }
 
         const start = data.checkInTime.toDate();
         const end = new Date();
         const minutes = Math.floor((end - start) / 60000);
 
+        // Считаем фактическую стоимость по времени
         const baseActual = calcActualPrice(minutes);
         const actualPrice = applyDiscount(baseActual, data.category);
 
@@ -340,7 +353,6 @@ if (window.location.pathname.includes('admin.html')) {
             actualPrice: actualPrice
         });
     };
-
     // Вспомогательная функция: сначала кеш, потом сервер
     async function getDocFromCacheOrServer(docRef) {
         const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
