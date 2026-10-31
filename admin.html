@@ -7,7 +7,9 @@
         body { font-family: sans-serif; padding: 10px; margin: 0; background: #f9f9f9; }
         h1 { font-size: 20px; text-align: center; }
         h2 { font-size: 18px; margin-top: 20px; }
-        .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .topbar { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn-logout { background: #e74c3c; color: white; border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
         th { background: #f1f1f1; font-weight: bold; }
@@ -19,7 +21,6 @@
         .btn-extend { background: #f39c12; color: white; }
         .btn-call { background: #2ecc71; color: white; font-size: 16px; padding: 6px 0; }
         
-        /* Модальное окно */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
         .modal-content { background: white; padding: 20px; border-radius: 15px; text-align: center; max-width: 90%; max-height: 90%; overflow: auto; }
         .modal-content h3 { margin-top: 0; }
@@ -30,7 +31,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-    <h1>Панель администратора</h1>
+    <div class="topbar">
+        <h1 style="margin:0;">Панель администратора</h1>
+        <button class="btn-logout" id="logoutBtn" style="display:none;" onclick="logout()">Выйти</button>
+    </div>
     
     <div id="loginSection">
         <input type="email" id="adminEmail" placeholder="Email админа" style="display:block; width:100%; padding:10px; margin-bottom:10px; box-sizing: border-box;">
@@ -48,7 +52,6 @@
         <div id="debug" style="color: #999; font-size: 12px; margin-top: 20px; text-align: center;"></div>
     </div>
 
-    <!-- Модальное окно для QR -->
     <div id="qrModal" class="modal">
         <div class="modal-content">
             <h3 id="modalChildName"></h3>
