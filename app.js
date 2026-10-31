@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = {
@@ -19,7 +19,6 @@ const BASE_URL = window.location.href.substring(0, window.location.href.lastInde
 let currentData = null;
 
 // --- ТАРИФЫ И ЛОГИКА РАСЧЕТА ---
-// Базовые цены
 const PRICE_30 = 300;
 const PRICE_1H = 400;
 const PRICE_UNLIM = 600;
@@ -27,10 +26,10 @@ const MIN_PAID_TIME = 15; // минут: если меньше — полный 
 
 // Функция расчета фактической стоимости по времени нахождения (в минутах)
 function calcActualPrice(minutes) {
-    if (minutes < MIN_PAID_TIME) return 0; // полный возврат
+    if (minutes < MIN_PAID_TIME) return 0;
     if (minutes <= 30) return PRICE_30;
     if (minutes <= 60) return PRICE_1H;
-    return PRICE_UNLIM; // свыше часа = безлимит
+    return PRICE_UNLIM;
 }
 
 // Функция применения скидки к базовой сумме
@@ -40,7 +39,7 @@ function applyDiscount(baseSum, category) {
     if (category === 'svo' || category === 'ovz' || category === 'many') {
         return Math.max(0, baseSum - 50);
     }
-    return baseSum; // standard
+    return baseSum;
 }
 
 // Определяем цену предоплаты по выбранному тарифу
@@ -48,7 +47,7 @@ function getPrepaidAmount(tariffHours) {
     if (tariffHours === 0.5) return PRICE_30;
     if (tariffHours === 1) return PRICE_1H;
     if (tariffHours >= 24) return PRICE_UNLIM;
-    return PRICE_30; // fallback
+    return PRICE_30;
 }
 
 // Название категории для отображения
@@ -74,7 +73,6 @@ if (form) {
         const tariffHours = Number(document.getElementById('tariff').value);
         const category = document.getElementById('category').value;
 
-        // Предоплата с учетом скидки на этапе заезда (по выбранному тарифу)
         const prepaidBase = getPrepaidAmount(tariffHours);
         const prepaid = applyDiscount(prepaidBase, category);
 
@@ -82,9 +80,9 @@ if (form) {
             await addDoc(collection(db, "visits"), {
                 childName: name,
                 parentPhone: phone,
-                tariffHours: tariffHours,       // выбранный тариф (0.5 / 1 / 24)
-                category: category,             // категория скидки
-                prepaid: prepaid,               // сколько заплатил при заезде
+                tariffHours: tariffHours,
+                category: category,
+                prepaid: prepaid,
                 status: "pending",
                 checkInTime: null,
                 checkOutTime: null,
@@ -124,7 +122,6 @@ if (timerElement) {
                 document.getElementById('timeLeftText').innerText = "Ребенка забрали";
                 document.getElementById('extendBtn').style.display = 'none';
                 if (timerInterval) clearInterval(timerInterval);
-                // Показать итоговый счет
                 if (currentData.actualPrice !== undefined) {
                     const diff = currentData.prepaid - currentData.actualPrice;
                     if (diff > 0) {
@@ -141,13 +138,11 @@ if (timerElement) {
             // Если ребенок еще в комнате
             if (currentData.checkInTime) {
                 const start = currentData.checkInTime.toDate();
-                // Если тариф безлимит (24), таймер считает до конца суток от заезда
                 const limitHours = currentData.tariffHours >= 24 ? 24 : currentData.tariffHours;
                 const end = new Date(start.getTime() + limitHours * 60 * 60 * 1000);
                 
                 document.getElementById('startTime').innerText = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
                 document.getElementById('endTime').innerText = limitHours >= 24 ? 'Безлимит (24 ч)' : end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                
                 document.getElementById('price').innerText = currentData.prepaid;
                 document.getElementById('tariffText').innerText = `${categoryLabel(currentData.category)} | Тариф: ${limitHours >= 24 ? 'Безлимит' : limitHours + ' ч.'}`;
 
@@ -159,7 +154,6 @@ if (timerElement) {
                         timerElement.style.color = "red";
                         document.getElementById('timeLeftText').innerText = "Время вышло!";
                         clearInterval(timerInterval);
-                        
                         if (!alarmTriggered) {
                             alarmTriggered = true;
                             if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
@@ -185,14 +179,11 @@ window.extendTime = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const visitId = urlParams.get('id');
     if (visitId && currentData) {
-        // Продление: увеличиваем выбранный тариф до следующего уровня
-        // 0.5 -> 1, 1 -> 24 (безлимит)
         let newTariff = currentData.tariffHours;
         if (currentData.tariffHours === 0.5) newTariff = 1;
         else if (currentData.tariffHours === 1) newTariff = 24;
-        else newTariff = 24; // уже безлимит
+        else newTariff = 24;
 
-        // Пересчет предоплаты с учетом скидки
         const base = getPrepaidAmount(newTariff);
         const newPrepaid = applyDiscount(base, currentData.category);
 
@@ -217,9 +208,7 @@ if (window.location.pathname.includes('admin.html')) {
     };
 
     window.logout = () => {
-        signOut(auth).then(() => {
-            // onAuthStateChanged переключит интерфейс
-        }).catch((error) => alert("Ошибка выхода: " + error.message));
+        signOut(auth).catch((error) => alert("Ошибка выхода: " + error.message));
     };
 
     onAuthStateChanged(auth, (user) => {
@@ -318,31 +307,17 @@ if (window.location.pathname.includes('admin.html')) {
         });
     };
 
-        window.checkoutVisit = async (id) => {
-        // Находим запись, чтобы узнать время заезда
+    window.checkoutVisit = async (id) => {
         const docRef = doc(db, "visits", id);
-        
-        // Используем onSnapshot-подход: получаем данные из уже имеющегося стейта
-        // (в startListening у нас есть все данные, но проще сделать отдельный запрос)
-        const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
         const snap = await getDoc(docRef);
-        
-        if (!snap.exists()) {
-            alert("Запись не найдена");
-            return;
-        }
-        
+        if (!snap.exists()) { alert("Запись не найдена"); return; }
         const data = snap.data();
-        if (!data.checkInTime) {
-            alert("Ошибка: нет времени заезда");
-            return;
-        }
+        if (!data.checkInTime) { alert("Ошибка: нет времени заезда"); return; }
 
         const start = data.checkInTime.toDate();
         const end = new Date();
         const minutes = Math.floor((end - start) / 60000);
 
-        // Считаем фактическую стоимость по времени
         const baseActual = calcActualPrice(minutes);
         const actualPrice = applyDiscount(baseActual, data.category);
 
@@ -353,11 +328,6 @@ if (window.location.pathname.includes('admin.html')) {
             actualPrice: actualPrice
         });
     };
-    // Вспомогательная функция: сначала кеш, потом сервер
-    async function getDocFromCacheOrServer(docRef) {
-        const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-        return await getDoc(docRef);
-    }
 
     window.adminExtend = async (id, currentTariff, category) => {
         let newTariff = currentTariff;
@@ -390,14 +360,20 @@ if (window.location.pathname.includes('superuser.html')) {
             .catch((error) => alert("Ошибка входа: " + error.message));
     };
 
+    window.logout = () => {
+        signOut(auth).catch((error) => alert("Ошибка выхода: " + error.message));
+    };
+
     onAuthStateChanged(auth, (user) => {
         if (user) {
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('superPanel').style.display = 'block';
+            document.getElementById('logoutBtn').style.display = 'block';
             loadSuperData();
         } else {
             document.getElementById('loginSection').style.display = 'block';
             document.getElementById('superPanel').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'none';
         }
     });
 
@@ -548,7 +524,6 @@ if (window.location.pathname.includes('superuser.html')) {
 
     window.deleteFilteredDay = async () => {
         const fromVal = document.getElementById('filterFrom').value;
-              const fromVal = document.getElementById('filterFrom').value;
         const toVal = document.getElementById('filterTo').value;
 
         if (!fromVal && !toVal) {
@@ -567,7 +542,6 @@ if (window.location.pathname.includes('superuser.html')) {
     };
 
     function renderHoursChart() {
-        // Считаем, сколько детей находилось в комнате в каждый час (0..23)
         const hoursCount = Array(24).fill(0);
         filteredData.forEach(d => {
             if (!d.checkInTime || !d.checkOutTime) return;
