@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAMr6_gJxdtCEl_uYmsDN9LwXtq9rRoWRA",
@@ -15,13 +15,54 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// --- ТАРИФЫ ---
-const PRICE_PER_HOUR = 300;        // Базовый тариф
-const EXTEND_PRICE_PER_HOUR = 400; // Тариф продления (дороже)
-
 const BASE_URL = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-
 let currentData = null;
+
+// --- ТАРИФЫ И ЛОГИКА РАСЧЕТА ---
+// Базовые цены
+const PRICE_30 = 300;
+const PRICE_1H = 400;
+const PRICE_UNLIM = 600;
+const MIN_PAID_TIME = 15; // минут: если меньше — полный возврат
+
+// Функция расчета фактической стоимости по времени нахождения (в минутах)
+function calcActualPrice(minutes) {
+    if (minutes < MIN_PAID_TIME) return 0; // полный возврат
+    if (minutes <= 30) return PRICE_30;
+    if (minutes <= 60) return PRICE_1H;
+    return PRICE_UNLIM; // свыше часа = безлимит
+}
+
+// Функция применения скидки к базовой сумме
+function applyDiscount(baseSum, category) {
+    if (category === 'yarmarka') return Math.round(baseSum * 0.5);
+    if (category === 'fitness') return Math.round(baseSum * 0.9);
+    if (category === 'svo' || category === 'ovz' || category === 'many') {
+        return Math.max(0, baseSum - 50);
+    }
+    return baseSum; // standard
+}
+
+// Определяем цену предоплаты по выбранному тарифу
+function getPrepaidAmount(tariffHours) {
+    if (tariffHours === 0.5) return PRICE_30;
+    if (tariffHours === 1) return PRICE_1H;
+    if (tariffHours >= 24) return PRICE_UNLIM;
+    return PRICE_30; // fallback
+}
+
+// Название категории для отображения
+function categoryLabel(cat) {
+    const map = {
+        'standard': 'Стандарт',
+        'yarmarka': 'Сотрудник ТЦ «Ярмарка»',
+        'fitness': 'Фитнес-клуб',
+        'svo': 'СВО',
+        'ovz': 'ОВЗ',
+        'many': 'Многодетные'
+    };
+    return map[cat] || 'Стандарт';
+}
 
 // --- РОДИТЕЛЬ: форма заявки ---
 const form = document.getElementById('visitForm');
@@ -30,20 +71,26 @@ if (form) {
         e.preventDefault();
         const name = document.getElementById('childName').value;
         const phone = document.getElementById('parentPhone').value;
-        const tariffHours = document.getElementById('tariff').value;
+        const tariffHours = Number(document.getElementById('tariff').value);
+        const category = document.getElementById('category').value;
+
+        // Предоплата с учетом скидки на этапе заезда (по выбранному тарифу)
+        const prepaidBase = getPrepaidAmount(tariffHours);
+        const prepaid = applyDiscount(prepaidBase, category);
 
         try {
             await addDoc(collection(db, "visits"), {
                 childName: name,
                 parentPhone: phone,
-                baseHours: Number(tariffHours),
-                extraHours: 0,
+                tariffHours: tariffHours,       // выбранный тариф (0.5 / 1 / 24)
+                category: category,             // категория скидки
+                prepaid: prepaid,               // сколько заплатил при заезде
                 status: "pending",
                 checkInTime: null,
                 checkOutTime: null,
                 createdAt: serverTimestamp()
             });
-            document.getElementById('status').innerText = "Заявка отправлена! Подойдите к администратору.";
+            document.getElementById('status').innerText = `Заявка отправлена! К оплате при заезде: ${prepaid} ₽`;
             form.reset();
         } catch (error) {
             console.error("Ошибка: ", error);
@@ -75,27 +122,34 @@ if (timerElement) {
                 document.getElementById('timer').innerText = end.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
                 document.getElementById('timer').style.color = '#27ae60';
                 document.getElementById('timeLeftText').innerText = "Ребенка забрали";
-                document.getElementById('extendBtn').style.display = 'none'; // Скрываем кнопку продления
+                document.getElementById('extendBtn').style.display = 'none';
                 if (timerInterval) clearInterval(timerInterval);
+                // Показать итоговый счет
+                if (currentData.actualPrice !== undefined) {
+                    const diff = currentData.prepaid - currentData.actualPrice;
+                    if (diff > 0) {
+                        document.getElementById('price').innerText = `${currentData.actualPrice} ₽ (возврат ${diff} ₽)`;
+                    } else if (diff < 0) {
+                        document.getElementById('price').innerText = `${currentData.actualPrice} ₽ (доплата ${-diff} ₽)`;
+                    } else {
+                        document.getElementById('price').innerText = `${currentData.actualPrice} ₽`;
+                    }
+                }
                 return;
             }
 
             // Если ребенок еще в комнате
             if (currentData.checkInTime) {
                 const start = currentData.checkInTime.toDate();
-                const totalHours = (currentData.baseHours || 0) + (currentData.extraHours || 0);
-                const end = new Date(start.getTime() + totalHours * 60 * 60 * 1000);
+                // Если тариф безлимит (24), таймер считает до конца суток от заезда
+                const limitHours = currentData.tariffHours >= 24 ? 24 : currentData.tariffHours;
+                const end = new Date(start.getTime() + limitHours * 60 * 60 * 1000);
                 
                 document.getElementById('startTime').innerText = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                document.getElementById('endTime').innerText = end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
+                document.getElementById('endTime').innerText = limitHours >= 24 ? 'Безлимит (24 ч)' : end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
                 
-                // Расчет стоимости с разными тарифами
-                const baseSum = (currentData.baseHours || 0) * PRICE_PER_HOUR;
-                const extraSum = (currentData.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
-                const totalSum = baseSum + extraSum;
-
-                document.getElementById('price').innerText = totalSum;
-                document.getElementById('tariffText').innerText = `Базовый: ${currentData.baseHours} ч. + Доплата: ${currentData.extraHours || 0} ч.`;
+                document.getElementById('price').innerText = currentData.prepaid;
+                document.getElementById('tariffText').innerText = `${categoryLabel(currentData.category)} | Тариф: ${limitHours >= 24 ? 'Безлимит' : limitHours + ' ч.'}`;
 
                 if (timerInterval) clearInterval(timerInterval);
                 timerInterval = setInterval(() => {
@@ -106,16 +160,11 @@ if (timerElement) {
                         document.getElementById('timeLeftText').innerText = "Время вышло!";
                         clearInterval(timerInterval);
                         
-                        // Вибрация и звук
                         if (!alarmTriggered) {
                             alarmTriggered = true;
-                            if (navigator.vibrate) {
-                                navigator.vibrate([500, 200, 500, 200, 500]);
-                            }
+                            if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
                             const audio = document.getElementById('alarmSound');
-                            if (audio) {
-                                audio.play().catch(e => console.log("Звук заблокирован браузером:", e));
-                            }
+                            if (audio) audio.play().catch(e => console.log("Звук заблокирован:", e));
                         }
                     } else {
                         const h = Math.floor(diff / 3600000);
@@ -132,15 +181,26 @@ if (timerElement) {
     }
 }
 
-// Продление на странице родителя (добавляем 0.5 часа)
 window.extendTime = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const visitId = urlParams.get('id');
     if (visitId && currentData) {
+        // Продление: увеличиваем выбранный тариф до следующего уровня
+        // 0.5 -> 1, 1 -> 24 (безлимит)
+        let newTariff = currentData.tariffHours;
+        if (currentData.tariffHours === 0.5) newTariff = 1;
+        else if (currentData.tariffHours === 1) newTariff = 24;
+        else newTariff = 24; // уже безлимит
+
+        // Пересчет предоплаты с учетом скидки
+        const base = getPrepaidAmount(newTariff);
+        const newPrepaid = applyDiscount(base, currentData.category);
+
         await updateDoc(doc(db, "visits", visitId), {
-            extraHours: (currentData.extraHours || 0) + 0.5
+            tariffHours: newTariff,
+            prepaid: newPrepaid
         });
-        document.getElementById('msg').innerText = "Продление оформлено!";
+        document.getElementById('msg').innerText = "Тариф повышен!";
         document.getElementById('msg').style.display = 'block';
         setTimeout(() => document.getElementById('msg').style.display = 'none', 3000);
     }
@@ -151,22 +211,27 @@ if (window.location.pathname.includes('admin.html')) {
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
         const pass = document.getElementById('adminPass').value;
-        if (!email || !pass) {
-            alert("Введите email и пароль");
-            return;
-        }
+        if (!email || !pass) { alert("Введите email и пароль"); return; }
         signInWithEmailAndPassword(auth, email, pass)
             .catch((error) => alert("Ошибка входа: " + error.message));
+    };
+
+    window.logout = () => {
+        signOut(auth).then(() => {
+            // onAuthStateChanged переключит интерфейс
+        }).catch((error) => alert("Ошибка выхода: " + error.message));
     };
 
     onAuthStateChanged(auth, (user) => {
         if (user) {
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('adminPanel').style.display = 'block';
+            document.getElementById('logoutBtn').style.display = 'block';
             startListening();
         } else {
             document.getElementById('loginSection').style.display = 'block';
             document.getElementById('adminPanel').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'none';
         }
     });
 
@@ -176,8 +241,8 @@ if (window.location.pathname.includes('admin.html')) {
         const debug = document.getElementById('debug');
 
         onSnapshot(collection(db, "visits"), (snapshot) => {
-            let pendingHTML = `<table><tr><th>Имя</th><th>Телефон</th><th>Тариф</th><th>Действие</th></tr>`;
-            let activeHTML = `<table><tr><th>Имя</th><th>Прибыл</th><th>Уход</th><th>Тариф</th><th>К оплате</th><th>Связь</th><th>QR</th><th>Действие</th></tr>`;
+            let pendingHTML = `<table><tr><th>Имя</th><th>Телефон</th><th>Тариф</th><th>Категория</th><th>Предоплата</th><th>Действие</th></tr>`;
+            let activeHTML = `<table><tr><th>Имя</th><th>Прибыл</th><th>Уход</th><th>Тариф</th><th>Категория</th><th>К оплате</th><th>Связь</th><th>QR</th><th>Действие</th></tr>`;
             
             let pendingCount = 0;
             let activeCount = 0;
@@ -191,34 +256,30 @@ if (window.location.pathname.includes('admin.html')) {
                     pendingHTML += `<tr>
                         <td>${data.childName}</td>
                         <td>${data.parentPhone}</td>
-                        <td>${data.baseHours} ч.</td>
+                        <td>${data.tariffHours >= 24 ? 'Безлимит' : data.tariffHours + ' ч.'}</td>
+                        <td>${categoryLabel(data.category)}</td>
+                        <td>${data.prepaid} ₽</td>
                         <td><button class="btn btn-approve" onclick="approveVisit('${id}')">Посадить</button></td>
                     </tr>`;
                 } else if (data.status === 'active') {
                     activeCount++;
                     const start = data.checkInTime ? data.checkInTime.toDate() : new Date();
-                    const totalHours = (data.baseHours || 0) + (data.extraHours || 0);
-                    const end = new Date(start.getTime() + totalHours * 60 * 60 * 1000);
+                    const limitHours = data.tariffHours >= 24 ? 24 : data.tariffHours;
+                    const end = new Date(start.getTime() + limitHours * 60 * 60 * 1000);
                     const startStr = start.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                    const endStr = end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-                    
-                    // Расчет стоимости
-                    const baseSum = (data.baseHours || 0) * PRICE_PER_HOUR;
-                    const extraSum = (data.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
-                    const totalPrice = baseSum + extraSum;
-                    
-                    const tariffStr = `${data.baseHours} ч. + ${data.extraHours || 0} ч.`;
+                    const endStr = limitHours >= 24 ? 'Безлимит' : end.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
 
                     activeHTML += `<tr>
                         <td>${data.childName}</td>
                         <td>${startStr}</td>
                         <td>${endStr}</td>
-                        <td>${tariffStr}</td>
-                        <td>${totalPrice} ₽</td>
+                        <td>${data.tariffHours >= 24 ? 'Безлимит' : data.tariffHours + ' ч.'}</td>
+                        <td>${categoryLabel(data.category)}</td>
+                        <td>${data.prepaid} ₽</td>
                         <td><a href="tel:${data.parentPhone}" class="btn btn-call">📞</a></td>
                         <td><button class="btn btn-qr" onclick="showQR('${id}', '${data.childName}')">QR</button></td>
                         <td>
-                            <button class="btn btn-extend" onclick="adminExtend('${id}', ${data.extraHours || 0})">+30 мин</button>
+                            <button class="btn btn-extend" onclick="adminExtend('${id}', ${data.tariffHours}, '${data.category}')">Продлить</button>
                             <button class="btn btn-checkout" onclick="checkoutVisit('${id}')">Забрали</button>
                         </td>
                     </tr>`;
@@ -241,14 +302,7 @@ if (window.location.pathname.includes('admin.html')) {
         const qrContainer = document.getElementById('qrModalCanvas');
         qrContainer.innerHTML = '';
         const parentLink = `${BASE_URL}status.html?id=${id}`;
-        new QRCode(qrContainer, {
-            text: parentLink,
-            width: 400,
-            height: 400,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
-        });
+        new QRCode(qrContainer, { text: parentLink, width: 400, height: 400, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
         document.getElementById('qrModal').style.display = 'flex';
     };
 
@@ -265,15 +319,46 @@ if (window.location.pathname.includes('admin.html')) {
     };
 
     window.checkoutVisit = async (id) => {
-        await updateDoc(doc(db, "visits", id), {
+        // Находим запись и считаем фактическую стоимость
+        const docRef = doc(db, "visits", id);
+        const snap = await getDocFromCacheOrServer(docRef);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        if (!data.checkInTime) { alert("Ошибка: нет времени заезда"); return; }
+
+        const start = data.checkInTime.toDate();
+        const end = new Date();
+        const minutes = Math.floor((end - start) / 60000);
+
+        const baseActual = calcActualPrice(minutes);
+        const actualPrice = applyDiscount(baseActual, data.category);
+
+        await updateDoc(docRef, {
             status: "completed",
-            checkOutTime: new Date()
+            checkOutTime: end,
+            actualMinutes: minutes,
+            actualPrice: actualPrice
         });
     };
 
-    window.adminExtend = async (id, currentExtra) => {
+    // Вспомогательная функция: сначала кеш, потом сервер
+    async function getDocFromCacheOrServer(docRef) {
+        const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+        return await getDoc(docRef);
+    }
+
+    window.adminExtend = async (id, currentTariff, category) => {
+        let newTariff = currentTariff;
+        if (currentTariff === 0.5) newTariff = 1;
+        else if (currentTariff === 1) newTariff = 24;
+        else newTariff = 24;
+
+        const base = getPrepaidAmount(newTariff);
+        const newPrepaid = applyDiscount(base, category);
+
         await updateDoc(doc(db, "visits", id), {
-            extraHours: currentExtra + 0.5
+            tariffHours: newTariff,
+            prepaid: newPrepaid
         });
     };
 }
@@ -288,10 +373,7 @@ if (window.location.pathname.includes('superuser.html')) {
     window.login = () => {
         const email = document.getElementById('adminEmail').value;
         const pass = document.getElementById('adminPass').value;
-        if (!email || !pass) {
-            alert("Введите email и пароль");
-            return;
-        }
+        if (!email || !pass) { alert("Введите email и пароль"); return; }
         signInWithEmailAndPassword(auth, email, pass)
             .catch((error) => alert("Ошибка входа: " + error.message));
     };
@@ -323,7 +405,6 @@ if (window.location.pathname.includes('superuser.html')) {
     window.applyDateFilter = (silent = false) => {
         const fromVal = document.getElementById('filterFrom').value;
         const toVal = document.getElementById('filterTo').value;
-
         currentFilter.from = fromVal ? new Date(fromVal + 'T00:00:00') : null;
         currentFilter.to = toVal ? new Date(toVal + 'T23:59:59') : null;
 
@@ -334,12 +415,8 @@ if (window.location.pathname.includes('superuser.html')) {
             if (currentFilter.to && dt > currentFilter.to) return false;
             return true;
         });
-
         renderAll();
-        if (!silent) {
-            document.getElementById('filterFrom').blur();
-            document.getElementById('filterTo').blur();
-        }
+        if (!silent) { document.getElementById('filterFrom').blur(); document.getElementById('filterTo').blur(); }
     };
 
     window.resetDateFilter = () => {
@@ -355,17 +432,13 @@ if (window.location.pathname.includes('superuser.html')) {
         renderHoursChart();
     }
 
-    function getTotalHours(data) {
-        return (data.baseHours || 0) + (data.extraHours || 0);
-    }
-
     function renderTotalStats() {
         let totalChildren = filteredData.length;
         let totalHours = 0;
         let totalRevenue = 0;
         filteredData.forEach(d => {
-            totalHours += getTotalHours(d);
-            totalRevenue += (d.baseHours || 0) * PRICE_PER_HOUR + (d.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
+            if (d.actualMinutes) totalHours += d.actualMinutes / 60;
+            totalRevenue += (d.actualPrice || 0);
         });
         document.getElementById('totalChildren').innerText = totalChildren;
         document.getElementById('totalHours').innerText = totalHours.toFixed(1) + " ч.";
@@ -377,18 +450,13 @@ if (window.location.pathname.includes('superuser.html')) {
         filteredData.forEach(d => {
             let dateKey = "Неизвестно";
             if (d.checkInTime) {
-                const dt = d.checkInTime.toDate();
-                dateKey = dt.toLocaleDateString('ru-RU');
+                dateKey = d.checkInTime.toDate().toLocaleDateString('ru-RU');
             }
-            if (!daily[dateKey]) {
-                daily[dateKey] = { count: 0, hours: 0, revenue: 0, admins: new Set(), ids: [] };
-            }
+            if (!daily[dateKey]) daily[dateKey] = { count: 0, hours: 0, revenue: 0, admins: new Set() };
             daily[dateKey].count++;
-            const h = getTotalHours(d);
-            daily[dateKey].hours += h;
-            daily[dateKey].revenue += (d.baseHours || 0) * PRICE_PER_HOUR + (d.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
+            if (d.actualMinutes) daily[dateKey].hours += d.actualMinutes / 60;
+            daily[dateKey].revenue += (d.actualPrice || 0);
             if (d.adminEmail) daily[dateKey].admins.add(d.adminEmail);
-            daily[dateKey].ids.push(d.id);
         });
 
         const tbody = document.getElementById('dailyTable');
@@ -427,17 +495,25 @@ if (window.location.pathname.includes('superuser.html')) {
         data.forEach(d => {
             const start = d.checkInTime ? d.checkInTime.toDate() : null;
             const end = d.checkOutTime ? d.checkOutTime.toDate() : null;
-            const totalHours = getTotalHours(d);
-            const sum = (d.baseHours || 0) * PRICE_PER_HOUR + (d.extraHours || 0) * EXTEND_PRICE_PER_HOUR;
+            const actual = d.actualPrice !== undefined ? d.actualPrice : (d.prepaid || 0);
+            const prepaid = d.prepaid || 0;
+            const diff = prepaid - actual;
+            let diffText = '';
+            if (diff > 0) diffText = `<span style="color:green;">возврат ${diff} ₽</span>`;
+            else if (diff < 0) diffText = `<span style="color:red;">доплата ${-diff} ₽</span>`;
+            else diffText = '—';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${start ? start.toLocaleDateString('ru-RU') : '—'}</td>
                 <td>${d.childName}</td>
                 <td>${start ? start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '—'}</td>
                 <td>${end ? end.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '—'}</td>
-                <td>${d.baseHours || 0} ч.</td>
-                <td>${d.extraHours || 0} ч.</td>
-                <td>${sum} ₽</td>
+                <td>${d.actualMinutes ? d.actualMinutes + ' мин.' : '—'}</td>
+                <td>${categoryLabel(d.category)}</td>
+                <td>${prepaid} ₽</td>
+                <td>${actual} ₽</td>
+                <td>${diffText}</td>
                 <td>${d.adminEmail || '—'}</td>
                 <td><button class="btn-delete" onclick="deleteOne('${d.id}')">🗑️</button></td>
             `;
@@ -447,98 +523,16 @@ if (window.location.pathname.includes('superuser.html')) {
 
     window.deleteOne = async (id) => {
         if (!confirm("Удалить эту запись навсегда?")) return;
-        try {
-            await deleteDoc(doc(db, "visits", id));
-        } catch (e) {
-            alert("Ошибка удаления: " + e.message);
-        }
+        try { await deleteDoc(doc(db, "visits", id)); } catch (e) { alert("Ошибка удаления: " + e.message); }
     };
 
     window.deleteDay = async (dateStr) => {
-        if (dateStr === "Неизвестно") {
-            alert("Нельзя удалить записи без даты.");
-            return;
-        }
-        const idsToDelete = allCompleted.filter(d => {
-            if (!d.checkInTime) return false;
-            return d.checkInTime.toDate().toLocaleDateString('ru-RU') === dateStr;
-        }).map(d => d.id);
-
-        if (idsToDelete.length === 0) {
-            alert("Нет записей за эту дату.");
-            return;
-        }
-        if (!confirm(`Удалить ${idsToDelete.length} записей за ${dateStr}? Это необратимо.`)) return;
-
-        try {
-            for (const id of idsToDelete) {
-                await deleteDoc(doc(db, "visits", id));
-            }
-        } catch (e) {
-            alert("Ошибка удаления: " + e.message);
-        }
+        if (dateStr === "Неизвестно") { alert("Нельзя удалить записи без даты."); return; }
+        const ids = allCompleted.filter(d => d.checkInTime && d.checkInTime.toDate().toLocaleDateString('ru-RU') === dateStr).map(d => d.id);
+        if (ids.length === 0) { alert("Нет записей за эту дату."); return; }
+        if (!confirm(`Удалить ${ids.length} записей за ${dateStr}?`)) return;
+        try { for (const id of ids) await deleteDoc(doc(db, "visits", id)); } catch (e) { alert("Ошибка: " + e.message); }
     };
 
     window.deleteFilteredDay = async () => {
-        const fromVal = document.getElementById('filterFrom').value;
-        const toVal = document.getElementById('filterTo').value;
-
-        if (!fromVal && !toVal) {
-            alert("Укажите дату (поле «с» и/или «по»), чтобы удалить записи за день.");
-            return;
-        }
-        if (fromVal !== toVal && toVal !== '') {
-            alert("Для удаления за день укажите одну и ту же дату в полях «с» и «по».");
-            return;
-        }
-
-        const dayStr = fromVal || toVal;
-        const [y, m, d] = dayStr.split('-');
-        const dateStr = `${d}.${m}.${y}`;
-        await deleteDay(dateStr);
-    };
-
-    function renderHoursChart() {
-        const hoursCount = Array(24).fill(0);
-        filteredData.forEach(d => {
-            if (!d.checkInTime || !d.checkOutTime) return;
-            const start = d.checkInTime.toDate();
-            const end = d.checkOutTime.toDate();
-            if (end <= start) return;
-            const startHour = start.getHours();
-            const endHour = end.getHours();
-            for (let h = startHour; h <= endHour; h++) {
-                const hourStart = new Date(start);
-                hourStart.setHours(h, 0, 0, 0);
-                const hourEnd = new Date(start);
-                hourEnd.setHours(h + 1, 0, 0, 0);
-                if (start < hourEnd && end > hourStart) {
-                    hoursCount[h]++;
-                }
-            }
-        });
-
-        const ctx = document.getElementById('hoursChart').getContext('2d');
-        if (hoursChartInstance) hoursChartInstance.destroy();
-        hoursChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: Array.from({length: 24}, (_, i) => i + ':00'),
-                datasets: [{
-                    label: 'Детей в комнате',
-                    data: hoursCount,
-                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                    borderColor: 'rgba(52, 152, 219, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
-                }
-            }
-        });
-    }
-}
+        const fromVal = document.getElementById('filterFrom').value
